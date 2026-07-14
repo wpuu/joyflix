@@ -1,30 +1,31 @@
 {
-  "spider": "https://jihulab.com/z-blog/vip/-/raw/main/jar/custom_spider.jar",
+  "spider": "https://raw.githubusercontent.com/FongMi/CatVodSpider/main/jar/custom_spider.jar",
   "wallpaper": "https://bing.com/th?id=OHR.BlueJays_ZH-CN0854497555_1920x1080.jpg",
   "sites": [
     {
-      "key": "liangzi",
-      "name": "⚡ 量子资源 (Joyflix同源)",
+      "key": "Joyflix_Liangzi",
+      "name": "🔥 私有路线 | 量子蓝光",
       "type": 1,
       "api": "https://cj.llzx.com/api.php/provide/vod/",
       "searchable": 1,
       "quickSearch": 1,
-      "filterable": 1
+      "filterable": 1,
+      "categories": ["电影", "连续剧", "综艺", "动漫"]
     },
     {
-      "key": "tiankong",
-      "name": "☁️ 天空资源 (Joyflix同源)",
+      "key": "Joyflix_Feifan",
+      "name": "🚀 私有路线 | 非凡极速",
       "type": 1,
-      "api": "https://api.tiankongapi.com/api.php/provide/vod/",
+      "api": "http://cj.ffzyapi.com/api.php/provide/vod/",
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 1
     },
     {
-      "key": "feifan",
-      "name": "🚀 非凡资源 (Joyflix同源)",
+      "key": "Joyflix_Tiankong",
+      "name": "☁️ 私有路线 | 天空无损",
       "type": 1,
-      "api": "http://cj.ffzyapi.com/api.php/provide/vod/",
+      "api": "https://api.tiankongapi.com/api.php/provide/vod/",
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 1
@@ -32,9 +33,16 @@
   ],
   "parses": [
     {
-      "name": "万能解析",
+      "name": "私有智能嗅探解析",
       "type": 0,
       "url": "https://jx.jsonplayer.com/player/?url="
+    }
+  ],
+  "rules": [
+    {
+      "name": "去除量子片头广告",
+      "hosts": ["vip.lz", "hd.lz", "v.cdnlz"],
+      "regex": ["#EXT-X-DISCONTINUITY\\r*\\n*#EXTINF:6\\.433333,[\\s\\S]*?#EXT-X-DISCONTINUITY"]
     }
   ],
   "flags": ["youku", "qq", "iqiyi", "qiyi", "letv", "sohu", "mgtv", "bilibili"]
