@@ -12,10 +12,16 @@ function getDoubanImageProxyConfig(): {
     | 'custom';
   proxyUrl: string;
 } {
-  const doubanImageProxyType =
+  let doubanImageProxyType =
     localStorage.getItem('doubanImageProxyType') ||
     (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
-    'direct';
+    'server';
+
+  // 历史设置兼容：direct/img3 在部分网络环境会返回 418 或加载失败，
+  // 统一迁移到同源服务器代理，避免要求新老用户手动修改设置。
+  if (doubanImageProxyType === 'direct' || doubanImageProxyType === 'img3') {
+    doubanImageProxyType = 'server';
+  }
   const doubanImageProxy =
     localStorage.getItem('doubanImageProxyUrl') ||
     (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY ||
@@ -57,7 +63,7 @@ export function processImageUrl(originalUrl: string): string {
       return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
     case 'direct':
     default:
-      return originalUrl;
+      return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
   }
 }
 
