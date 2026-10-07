@@ -121,7 +121,7 @@ export const UserMenu: React.FC<{ className?: string }> = ({ className }) => {
   const [doubanProxyUrl, setDoubanProxyUrl] = useState('');
   const [enableOptimization, setEnableOptimization] = useState(true);
   const [doubanDataSource, setDoubanDataSource] = useState('direct');
-  const [doubanImageProxyType, setDoubanImageProxyType] = useState('direct');
+  const [doubanImageProxyType, setDoubanImageProxyType] = useState('server');
   const [doubanImageProxyUrl, setDoubanImageProxyUrl] = useState('');
 
 
@@ -194,7 +194,7 @@ export const UserMenu: React.FC<{ className?: string }> = ({ className }) => {
       setDoubanProxyUrl(savedDoubanProxyUrl || defaultDoubanProxy);
 
       const savedDoubanImageProxyType = localStorage.getItem('doubanImageProxyType');
-      const defaultDoubanImageProxyType = (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'direct';
+      const defaultDoubanImageProxyType = (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'server';
       setDoubanImageProxyType(savedDoubanImageProxyType || defaultDoubanImageProxyType);
 
       const savedDoubanImageProxyUrl = localStorage.getItem('doubanImageProxyUrl');
@@ -295,7 +295,7 @@ export const UserMenu: React.FC<{ className?: string }> = ({ className }) => {
   const handleResetSettings = () => {
     const defaultDoubanProxyType = (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'direct';
     const defaultDoubanProxy = (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY || '';
-    const defaultDoubanImageProxyType = (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'direct';
+    const defaultDoubanImageProxyType = (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'server';
     const defaultDoubanImageProxyUrl = (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
 
     
