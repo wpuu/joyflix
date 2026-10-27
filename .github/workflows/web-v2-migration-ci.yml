@@ -31,3 +31,51 @@ jobs:
           fi
       - name: Run Node24 TypeScript contract tests without installing dependencies
         run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.routes.test.mjs
+
+  legacy-build-audit:
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+      - name: Install pinned pnpm without arbitrary dependency lifecycle scripts
+        run: |
+          npm install --global pnpm@10.14.0 --ignore-scripts --no-audit --no-fund
+          pnpm install --frozen-lockfile --ignore-scripts
+      - name: Generate old-site read-only local app assets
+        run: |
+          node scripts/convert-config.js
+          node scripts/generate-manifest.js
+      - name: Compile isolated existing JoyFlix branch only; no deploy
+        run: pnpm exec next build
+      - name: Verify new SourceHub routes refuse unapproved sources on actual Next.js
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec next start --hostname 127.0.0.1 --port 3187 > /tmp/web-v2-sourcehub-smoke.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..50}; do
+            if curl -fsS --max-time 2 http://127.0.0.1:3187/ >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ]; then
+            echo "Legacy Next server not ready"
+            tail -n 40 /tmp/web-v2-sourcehub-smoke.log
+            exit 1
+          fi
+          code="$(curl --silent --show-error --max-time 7 --output /tmp/sourcehub-closed.json --write-out '%{http_code}' 'http://127.0.0.1:3187/api/v2/sourcehub/search?keyword=test')"
+          test "$code" = "503"
+          grep -q '"sourcehub_no_approved_sources"' /tmp/sourcehub-closed.json
+          code="$(curl --silent --show-error --max-time 7 --output /tmp/sourcehub-invalid.json --write-out '%{http_code}' 'http://127.0.0.1:3187/api/v2/sourcehub/detail?source=bad!&id=1')"
+          test "$code" = "400"
+          echo "WEB_V2_SOURCEHUB_ROUTE_FAIL_CLOSED_PASS"
