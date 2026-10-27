@@ -78,3 +78,13 @@ JoyFlix 仓库是公开的，TV 是私有的：逐文件迁入前要检查素材
 - 视频部分直接使用迁来的 TV 播放引擎策略与真实前进时间检查；浏览器负责 HLS/MP4/WebM 解码，主动失败时只展示脱敏类别，不提供任意代理。
 - 路由位于旧 JoyFlix 项目迁移分支中，与旧 `/` 首页和 `/play` 播放页隔离，不会改旧站生产行为。V2 页面暂不配置任何在线片源，因此当前主要验收的是页面加载、接口联通及无片源拒绝，不是热门影视成功首帧。
 - GitHub 构建任务应验证两个新页面返回200；受保护独立Vercel Preview未成功前不得提供其网址为已可用。
+
+## 2026-10-28 / SourceHub 作品身份与弹幕时间轴准备
+
+- 不把同片名同年份当作同一作品：若跨来源缺少人工核验的 `canonicalWorkIds` 映射，不允许把弹幕错误合并。
+- 新增 `canonicalIdForWork` 和 `groupSourcehubFilms`，仅对显式核验的 Wikidata QID / 自有作品 ID 合并；同作品不同年份版本仍单独处理。
+- 搜索 API 返回归组后的真实来源和线路数量，V2 搜索页显示来源数；不传出搜索阶段的播放 URL。
+- 真正的弹幕时间轴仍需 `canonicalId + season/episode + edition/version + offset`，尚未开放用户评论和 AI 审核。
+- 新建的单独 SSO Vercel 测试项目仍存在失败的首次记录：`dpl_H3aGaLFoS8wDEgBfB41SwandzavV` 自动标记 `production` 但运行返回 ERROR，项目 `live=false`；没有向旧 JoyFlix 正式域名发布。**不继续尝试未经证实的 Vercel 自动目标。**
+- [GitHub CI 40540740371](https://github.com/wpuu/joyflix/actions/runs/40540740371)：23/23、旧 Next.js 构建与 /v2 页面 HTTP 回路通过。
+- [pnpm 安装兼容 CI 40541120674](https://github.com/wpuu/joyflix/actions/runs/40541120674)：`pnpm@10.14.0` 在干净 Node24 runner 上执行带生命周期脚本的 `pnpm install --frozen-lockfile` 成功，说明 Vercel 泛化错误**不能仅归因于锁文件或生命周期脚本**。目前仍缺平台实际根因。

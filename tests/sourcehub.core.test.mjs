@@ -4,6 +4,7 @@ import {
   APPROVED_SOURCES, canUseWork, cmsSearchRequest, isSourceApproved,
   normalizeCmsItem, normalizeCmsSearch, validateMediaUrl,
   cmsDetailRequest, searchSourceHub, detailSourceHub, readApprovedCmsJson,
+  canonicalIdForWork, groupSourcehubFilms,
 } from "../src/lib/sourcehub/core.ts";
 
 function fixture(overrides={}) {
@@ -136,4 +137,40 @@ test("CMS adapter rejects redirects, HTML, malformed JSON and oversized body",as
   assert.equal(await readApprovedCmsJson(url,async()=>new Response("<html>error</html>",{headers:{"content-type":"text/html"}})),null);
   assert.equal(await readApprovedCmsJson(url,async()=>new Response("not-json",{headers:{"content-type":"application/json"}})),null);
   assert.equal(await readApprovedCmsJson(url,async()=>new Response("{}",{headers:{"content-type":"application/json","content-length":"900000"}})),null);
+});
+
+test("same title and year from different sources stay apart without reviewed identity mapping",()=>{
+  const one=fixture();
+  const other=fixture({id:"othersource",endpoint:"https://api.other.example.org/cms",allowedApiHost:"api.other.example.org"});
+  const rows=[
+    normalizeCmsItem({vod_id:"42",vod_name:"某某电影",vod_year:"2021"},one,today),
+    normalizeCmsItem({vod_id:"42",vod_name:"某某电影",vod_year:"2021"},other,today)
+  ];
+  const groups=groupSourcehubFilms(rows);
+  assert.equal(groups.length,2);
+  assert.equal(groups[0].sourceCount,1);
+});
+test("explicitly reviewed canonical ID merges multiple legal sources, but not another year's remake",()=>{
+  const common="wd:Q536299";
+  const first=fixture({approval:{...fixture().approval,canonicalWorkIds:{"42":common}}});
+  const second=fixture({
+    id:"othersource",endpoint:"https://api.other.example.org/cms",allowedApiHost:"api.other.example.org",
+    approval:{...fixture().approval,canonicalWorkIds:{"43":common}}
+  });
+  assert.equal(canonicalIdForWork(first,"42"),common);
+  const a=normalizeCmsItem({vod_id:"42",vod_name:"作品",vod_year:"2001",vod_play_url:"正片$https://video.example.org/one.mp4"},first,today);
+  const b=normalizeCmsItem({vod_id:"43",vod_name:"作品",vod_year:"2001",vod_play_url:"正片$https://video.example.org/two.mp4"},second,today);
+  const remake=normalizeCmsItem({vod_id:"43",vod_name:"作品",vod_year:"2019"},second,today);
+  const groups=groupSourcehubFilms([a,b,remake]);
+  assert.equal(groups.length,2);
+  assert.equal(groups[0].id,common);
+  assert.equal(groups[0].sourceCount,2);
+  assert.equal(groups[0].lineCount,2);
+  assert.equal(groups[1].sourceCount,1);
+});
+test("unreviewed canonical identity mapping invalidates source instead of silently merging",()=>{
+  const x=fixture({approval:{...fixture().approval,canonicalWorkIds:{"42":"https://evil.example.org/!"}}});
+  assert.equal(isSourceApproved(x,today),false);
+  const y=fixture({approval:{...fixture().approval,canonicalWorkIds:{"777":"wd:Q536299"}}});
+  assert.equal(isSourceApproved(y,today),false);
 });

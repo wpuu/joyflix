@@ -10,6 +10,8 @@ export interface SourceApproval {
   permittedUse: "playback";
   expiresOn: string;
   approvedWorkIds: readonly string[];
+  // Individually reviewed identity mapping; identical titles alone are NOT proof of same work.
+  canonicalWorkIds?: Readonly<Record<string,string>>;
 }
 export interface SourceDefinition {
   id: string;
@@ -36,6 +38,7 @@ export interface SourceFilm {
   key: string;
   sourceId: string;
   workId: string;
+  canonicalId: string;
   title: string;
   year: number;
   lines: readonly PlayLine[];
@@ -93,6 +96,10 @@ export function isSourceApproved(s: SourceDefinition, today: string): boolean {
       s.allowedMediaHosts.some(host => !validHost(host) || host !== host.toLowerCase())) return false;
   if (a.approvedWorkIds.length < 1 || a.approvedWorkIds.length > 500 ||
       a.approvedWorkIds.some(id => !WORK_ID.test(id))) return false;
+  const identities = a.canonicalWorkIds ? Object.entries(a.canonicalWorkIds) : [];
+  if (identities.length > 500 || identities.some(([id,canonical]) =>
+      !a.approvedWorkIds.includes(id) || typeof canonical !== "string" ||
+      !/^(?:wd:Q[1-9][0-9]*|own:[a-z0-9_-]{2,80})$/.test(canonical))) return false;
   return true;
 }
 export function canUseWork(s: SourceDefinition, id: string, today: string): boolean {
@@ -137,6 +144,52 @@ function parseLines(raw: Record<string, unknown>, source: SourceDefinition): Pla
     return [{ id:source.id + ":" + groupIndex, name:lineId, episodes }];
   });
 }
+/** Only a source owner's explicitly reviewed identity map can merge providers.
+ * This is separate from playback license; no name-based merge/false danmaku.
+ */
+export function canonicalIdForWork(source: SourceDefinition, workId: string): string {
+  const assigned = source.approval.canonicalWorkIds?.[workId];
+  if (assigned && /^(?:wd:Q[1-9][0-9]*|own:[a-z0-9_-]{2,80})$/.test(assigned)) return assigned;
+  return "src:" + source.id + ":" + workId;
+}
+
+export interface SourceGroup {
+  id: string;
+  title: string;
+  year: number;
+  sourceId: string;
+  workId: string;
+  sourceCount: number;
+  lineCount: number;
+  refs: readonly {sourceId:string;workId:string;lineCount:number}[];
+}
+
+/** Group only verified shared identities. Unknown titles, different years and
+ * unaudited same-title mirrors stay separate to protect later danmaku timeline.
+ */
+export function groupSourcehubFilms(items: readonly SourceFilm[]): SourceGroup[] {
+  const map = new Map<string,{id:string;title:string;year:number;sourceId:string;workId:string;refs:{sourceId:string;workId:string;lineCount:number}[]}>();
+  for (const item of items.slice(0,300)) {
+    // Make conservative groups for conflicting known years even if mapped IDs match.
+    const key = item.canonicalId + "|" + String(item.year);
+    let group=map.get(key);
+    if(!group){
+      group={id:item.canonicalId,title:item.title,year:item.year,
+        sourceId:item.sourceId,workId:item.workId,refs:[]};
+      map.set(key,group);
+    }
+    if(group.refs.some(ref=>ref.sourceId===item.sourceId&&ref.workId===item.workId))continue;
+    if(group.refs.length<24)group.refs.push({
+      sourceId:item.sourceId,workId:item.workId,lineCount:item.lines.length
+    });
+  }
+  return [...map.values()].slice(0,100).map(g=>({
+    id:g.id,title:g.title,year:g.year,sourceId:g.sourceId,workId:g.workId,
+    sourceCount:g.refs.length,lineCount:g.refs.reduce((total,r)=>total+r.lineCount,0),
+    refs:g.refs
+  }));
+}
+
 export function normalizeCmsItem(input: unknown, source: SourceDefinition, today: string): SourceFilm | null {
   if (source.kind !== "cms-json" || !isSourceApproved(source, today)) return null;
   const row = obj(input);
@@ -150,7 +203,7 @@ export function normalizeCmsItem(input: unknown, source: SourceDefinition, today
     parsedYear <= 2100 ? parsedYear : 0;
   return {
     key:"source:" + source.id + ":" + id, sourceId:source.id, workId:id,
-    title, year, lines:parseLines(row, source)
+    canonicalId:canonicalIdForWork(source,id), title, year, lines:parseLines(row, source)
   };
 }
 /** Known JSON CMS list only: never interpret executable Spider/JAR or XML. */

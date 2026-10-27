@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import type { SourceFilm } from "@/lib/sourcehub/core";
+import type { SourceGroup } from "@/lib/sourcehub/core";
 
-type SearchEntry = Omit<SourceFilm,"lines"> & { lineCount: number };
+type SearchEntry = SourceGroup;
 type QueryState = "idle" | "loading" | "found" | "empty" | "unavailable" | "error";
 
 export default function WebV2Home() {
@@ -108,14 +108,14 @@ export default function WebV2Home() {
         {items.length?(
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {items.map(item=>(
-              <Link key={item.key}
+              <Link key={item.id+"|"+item.year}
                 href={"/v2/watch?source="+encodeURIComponent(item.sourceId)+"&id="+encodeURIComponent(item.workId)}
                 className="group rounded-xl border border-white/10 bg-[#1d2633] p-3 transition hover:border-amber-300/50">
                 <div className="flex aspect-[2/3] items-center justify-center rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 px-3 text-center text-xl font-semibold text-white/85">
                   {item.title}
                 </div>
                 <p className="mt-3 line-clamp-1 text-sm font-medium">{item.title}</p>
-                <p className="mt-1 text-xs text-slate-400">{item.year||"年份未核实"} · {item.lineCount} 条线路</p>
+                <p className="mt-1 text-xs text-slate-400">{item.year||"年份未核实"} · {item.sourceCount} 个来源 · {item.lineCount} 条线路</p>
               </Link>
             ))}
           </div>

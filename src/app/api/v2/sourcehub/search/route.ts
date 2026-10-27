@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { APPROVED_SOURCES, isSourceApproved, searchSourceHub } from '@/lib/sourcehub/core';
+import { APPROVED_SOURCES, groupSourcehubFilms, isSourceApproved, searchSourceHub } from '@/lib/sourcehub/core';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,6 +17,6 @@ export async function GET(request: Request) {
   }
   const rows = await searchSourceHub(query,today,approved);
   // Source playback URLs may contain credentials; search results contain no URL.
-  const items = rows.map(({lines,...item})=>({...item,lineCount:lines.length}));
+  const items = groupSourcehubFilms(rows);
   return NextResponse.json({items}, {headers:{'Cache-Control':'private, no-store'}});
 }
