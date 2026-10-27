@@ -1,0 +1,32 @@
+name: Web V2 pnpm install parity diagnostic
+on:
+  push:
+    branches: [feature/web-v2-migration-20261027]
+    paths:
+      - ".github/workflows/web-v2-install-parity.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  install-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+      - name: Install exact pnpm version without global lifecycle scripts
+        run: npm install --global pnpm@10.14.0 --ignore-scripts --no-audit --no-fund
+      - name: Reproduce Vercel pnpm install with lifecycle scripts, ephemeral runner only
+        run: pnpm install --frozen-lockfile --reporter=append-only
+      - name: Check exact dependency resolution and report summary
+        run: |
+          node -e 'const p=require("./package.json");console.log(JSON.stringify({framework:"nextjs",packageManager:p.packageManager,next:p.dependencies.next,react:p.dependencies.react}))'
+          pnpm exec next --version
+          echo "WEB_V2_PNPM_INSTALL_PARITY_PASS"
