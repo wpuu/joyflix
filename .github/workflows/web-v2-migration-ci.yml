@@ -11,6 +11,9 @@ on:
       - "tests/webv2.playback.test.mjs"
       - ".github/workflows/web-v2-migration-ci.yml"
       - "next.config.js"
+      - "src/app/v2/**"
+      - "src/components/webv2/**"
+      - "tests/webv2.ui.test.mjs"
       - "tests/webv2.preview-guard.test.mjs"
   workflow_dispatch:
 permissions:
@@ -34,7 +37,7 @@ jobs:
             exit 1
           fi
       - name: Run Node24 TypeScript contract tests without installing dependencies
-        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.routes.test.mjs tests/webv2.playback.test.mjs tests/webv2.preview-guard.test.mjs
+        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.routes.test.mjs tests/webv2.playback.test.mjs tests/webv2.preview-guard.test.mjs tests/webv2.ui.test.mjs
 
   legacy-build-audit:
     needs: contract
@@ -107,4 +110,7 @@ jobs:
           grep -q '"sourcehub_no_approved_sources"' /tmp/sourcehub-closed.json
           code="$(curl --silent --show-error --max-time 7 --output /tmp/sourcehub-invalid.json --write-out '%{http_code}' 'http://127.0.0.1:3187/api/v2/sourcehub/detail?source=bad!&id=1')"
           test "$code" = "400"
+          curl -fsS --max-time 7 'http://127.0.0.1:3187/v2' | grep -q '观影指南 Web V2'
+          curl -fsS --max-time 7 'http://127.0.0.1:3187/v2/watch?source=samplecms&id=42' | grep -q '影片播放页'
+          echo "WEB_V2_ROUTE_SHELL_SMOKE_PASS"
           echo "WEB_V2_SOURCEHUB_ROUTE_FAIL_CLOSED_PASS"
