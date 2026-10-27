@@ -7,6 +7,8 @@ on:
       - "tests/sourcehub.core.test.mjs"
       - "tests/sourcehub.routes.test.mjs"
       - "src/app/api/v2/sourcehub/**"
+      - "src/lib/webv2/player/**"
+      - "tests/webv2.playback.test.mjs"
       - ".github/workflows/web-v2-migration-ci.yml"
   workflow_dispatch:
 permissions:
@@ -30,7 +32,7 @@ jobs:
             exit 1
           fi
       - name: Run Node24 TypeScript contract tests without installing dependencies
-        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.routes.test.mjs
+        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.routes.test.mjs tests/webv2.playback.test.mjs
 
   legacy-build-audit:
     needs: contract
