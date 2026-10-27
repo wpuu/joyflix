@@ -65,7 +65,7 @@ JoyFlix 仓库是公开的，TV 是私有的：逐文件迁入前要检查素材
 
 ## 2026-10-28 / 第124轮：隔离 Preview 项目与真实构建门禁
 
-- Vercel 中建立单独项目 `joyflix-web-v2-preview`，Project ID `prj_Rsb44MGU9x6aEd6IqgR4A4MawFrX`，SSO保护 all，**未绑定自定义域名、未关联Git仓库、未进行生产部署**。
+- Vercel 中建立单独项目 `joyflix-web-v2-preview`，Project ID `prj_Rsb44MGU9x6aEd6IqgR4A4MawFrX`，SSO保护 all，**创建时没有绑定自定义域名、没有关联Git仓库，也未自动部署**；后续首次手动Git部署却被Vercel标记为production并返回ERROR，参见下方审计。
 - 原 `joyflix` Vercel 项目 ID `prj_EUzmQpHGHpDZy6VDHZ2ao8LInC10` 中，旧 main 与本迁移分支均出现了早期 Vercel CLI 中止错误，不能认定由 SourceHub 引起；日志仅有泛化错误及依赖安装开始，根因仍待定。
 - 在迁移分支的 `next.config.js` 加入新 Web V2 Preview-only 门禁：只有指定项目、分支、`VERCEL_ENV=preview` 与 `VERCEL_TARGET_ENV=preview` 同时成立才能编译迁移分支；原旧项目即使自动创建本分支 Preview，也必须失败。
 - GitHub CI 增加模拟老项目 Preview 拒绝、错误 production 目标拒绝、正确隔离 Preview 允许三种真实 next.config 加载断言；默认本地构建仍适用。
@@ -88,3 +88,37 @@ JoyFlix 仓库是公开的，TV 是私有的：逐文件迁入前要检查素材
 - 新建的单独 SSO Vercel 测试项目仍存在失败的首次记录：`dpl_H3aGaLFoS8wDEgBfB41SwandzavV` 自动标记 `production` 但运行返回 ERROR，项目 `live=false`；没有向旧 JoyFlix 正式域名发布。**不继续尝试未经证实的 Vercel 自动目标。**
 - [GitHub CI 40540740371](https://github.com/wpuu/joyflix/actions/runs/40540740371)：23/23、旧 Next.js 构建与 /v2 页面 HTTP 回路通过。
 - [pnpm 安装兼容 CI 40541120674](https://github.com/wpuu/joyflix/actions/runs/40541120674)：`pnpm@10.14.0` 在干净 Node24 runner 上执行带生命周期脚本的 `pnpm install --frozen-lockfile` 成功，说明 Vercel 泛化错误**不能仅归因于锁文件或生命周期脚本**。目前仍缺平台实际根因。
+
+
+## 2026-10-28 / 第124轮：本轮最新交付验收
+
+### 源码与CI
+
+- Web V2 新增独立搜索页 /v2 和播放页 /v2/watch，采用 TV 移动端视觉风格并从新版 SourceHub API 读取影片、线路与选集；只有点击按钮后才请求视频，不改旧网站的首页、搜索与播放路由。
+- 正式上线源仍为空。CMS 来源须先确认具体作品的合法传播范围，再可加入白名单。不能把源格式正确、影片名字存在或旧站API可访问视为源已通过。
+- 新增跨源作品映射 canonicalWorkIds 和 groupSourcehubFilms。未人工核对的同名作品不可自动合并；同一作品不同发行年份的 group.id 加入年份后缀。弹幕还需独立的分集、剪辑版本和时间偏移，尚未启动对外评论。
+- 最新已通过的功能源码 SHA：db1620803ab943aadb7cad4ab8c34c72626f7be7。为了支持旧 JoyFlix 的 TS ES5 编译目标，已把 Map.values() 的展开迭代替换为 Array.from()。
+- [GitHub CI #40542447724](https://github.com/wpuu/joyflix/actions/runs/40542447724)：completed/success，27/27测试通过。包括 Next.js14 构建、Preview环境门禁、真实HTTP页面、SourceHub无授权拒绝及视频URL不泄漏的回归。
+- 保留此前失败证据：[CI #40541966770](https://github.com/wpuu/joyflix/actions/runs/40541966770) 旧断言未更新；[CI #40542153448](https://github.com/wpuu/joyflix/actions/runs/40542153448) ES5 Map迭代编译错误；二者均已定向修复，不能冒称失败提交通过。
+- [pnpm安装对照 CI #40541120674](https://github.com/wpuu/joyflix/actions/runs/40541120674)：全新 Node24 上 pnpm10.14.0 的完整 frozen-lockfile 安装成功，因此不能把 Vercel 的泛化中止直接判为依赖锁文件损坏。
+- [私有 TV导出审计 #40532699164](https://github.com/wpuu/TV/actions/runs/40532699164)：已扫描代码的常见凭据特征未命中；仍有四项二进制素材需要许可审查，不代表全量私有源码可公开复制。
+
+### Vercel真实状态
+
+- 原 JoyFlix 生产项目 ID prj_EUzmQpHGHpDZy6VDHZ2ao8LInC10，正式域名 wpujoyflix.vercel.app 仍指向旧 READY 部署 dpl_FeD6QjKhiPruz8pJFgaT4YCdYZpk；JoyFlix main 原SHA未改变。
+- 新隔离项目 joyflix-web-v2-preview，ID prj_Rsb44MGU9x6aEd6IqgR4A4MawFrX，Vercel Authentication为all，无公开自定义域名。一笔首次 Git 部署 dpl_H3aGaLFoS8wDEgBfB41SwandzavV 意外被返回 target=production，但状态ERROR且项目live=false，**不属于可用的 Preview 或实际生产上线**。
+- 新构建门禁拒绝错误项目或 production 环境，不得关闭门禁或关闭SSO。由于旧项目和新项目的 JoyFlix Git 构建均在依赖安装阶段附近遇到同一泛化错误，而 GitHub 安装和构建可通过，Vercel根因仍是未证实的环境/集成阻塞；先停用无效重复尝试。
+
+### 验收关口
+
+| 阶段 | 结论 |
+| --- | --- |
+| P0 双仓库恢复基线与迁移分支 | PASS |
+| P1 SourceHub CMS规范化、授权拒绝与HTTP接口 | PASS（不含真实片源） |
+| P2 Web V2 搜索与播放器页面 | PASS（CI +本地真实HTTP，尚无在线视频） |
+| P2 Vercel在线 Preview | BLOCKED（不能宣称READY） |
+| P3 弹幕及Agnes自动审核 | NOT STARTED |
+| P4 FongMi Android改造 | NOT STARTED，待Web V2门槛通过 |
+| P5 商业上线 | BLOCKED：片源权利、合规、用户验收和广告盈利仍未知 |
+
+下一轮应优先解决安全的Vercel Preview发布路径，并对用户后续提供的有使用许可的无广告 CMS/媒体源做可达性和合法播放验证。没有这两项证据前，不合并 JoyFlix main，不覆盖旧站，也不把空片库当成可用产品。
