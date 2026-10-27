@@ -178,3 +178,101 @@ export function cmsSearchRequest(source: SourceDefinition, query: string, today:
   endpoint.searchParams.set("wd",query.trim());
   return endpoint.href;
 }
+
+/** Small, bounded CMS transport. Only preapproved sources can reach this call.
+ * Server deployments must additionally enforce outbound DNS/egress allowlists
+ * before enabling any external source. No media proxy or auth bypass.
+ */
+export type CmsTransport = (input: string, init: RequestInit) => Promise<Response>;
+const MAX_RESPONSE_BYTES = 512000;
+export async function readApprovedCmsJson(
+  requestUrl: string, transport: CmsTransport = fetch,
+): Promise<unknown | null> {
+  const request = httpsUrl(requestUrl);
+  if (!request) return null;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 4500);
+  try {
+    const response = await transport(request.href, {
+      method: "GET", redirect: "manual", signal: abort.signal,
+      headers: {Accept:"application/json"}, cache:"no-store"
+    });
+    const length = Number(response.headers.get("content-length") || 0);
+    if (response.status !== 200 ||
+        !/^application\/(?:json|[\w.+-]+\+json)(?:;|$)/i.test(response.headers.get("content-type") || "") ||
+        (length && (!Number.isFinite(length) || length > MAX_RESPONSE_BYTES)) ||
+        !response.body) {
+      await response.body?.cancel().catch(() => undefined);
+      return null;
+    }
+    const reader = response.body.getReader();
+    let bytes = 0;
+    const decoder = new TextDecoder();
+    let text = "";
+    try {
+      while (true) {
+        const part = await reader.read();
+        if (part.done) break;
+        bytes += part.value.byteLength;
+        if (bytes > MAX_RESPONSE_BYTES) return null;
+        text += decoder.decode(part.value, {stream:true});
+      }
+      text += decoder.decode();
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+    try { return JSON.parse(text) as unknown; } catch { return null; }
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
+
+export function cmsDetailRequest(
+  source: SourceDefinition, id: string, today: string,
+): string | null {
+  if (source.kind !== "cms-json" || !WORK_ID.test(id) ||
+      !canUseWork(source, id, today)) return null;
+  const endpoint = httpsUrl(source.endpoint);
+  if (!endpoint) return null;
+  endpoint.search = "";
+  endpoint.searchParams.set("ac", "videolist");
+  endpoint.searchParams.set("ids", id);
+  return endpoint.href;
+}
+
+/** No implicit mirror lookup; empty registry is a deliberate closed state. */
+export async function searchSourceHub(
+  query: string, today: string, registry: readonly SourceDefinition[] = APPROVED_SOURCES,
+  transport: CmsTransport = fetch,
+): Promise<SourceFilm[]> {
+  const trimmed = query.trim();
+  if (!trimmed || trimmed.length > 80) return [];
+  const combined: SourceFilm[] = [];
+  const seen = new Set<string>();
+  const reviewed = registry.filter(s => s.kind === "cms-json" && isSourceApproved(s, today)).slice(0,3);
+  for (const source of reviewed) {
+    const request = cmsSearchRequest(source, trimmed, today);
+    if (!request) continue;
+    const payload = await readApprovedCmsJson(request, transport);
+    for (const item of normalizeCmsSearch(payload, source, today)) {
+      if (seen.has(item.key)) continue;
+      seen.add(item.key);
+      combined.push(item);
+    }
+  }
+  return combined;
+}
+
+export async function detailSourceHub(
+  sourceId: string, id: string, today: string,
+  registry: readonly SourceDefinition[] = APPROVED_SOURCES,
+  transport: CmsTransport = fetch,
+): Promise<SourceFilm | null> {
+  const source = registry.find(s => s.id === sourceId);
+  if (!source) return null;
+  const request = cmsDetailRequest(source, id, today);
+  if (!request) return null;
+  const payload = await readApprovedCmsJson(request, transport);
+  if (!payload) return null;
+  const item = normalizeCmsSearch(payload, source, today).find(x => x.workId === id);
+  return item ?? null;
+}

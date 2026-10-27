@@ -32,3 +32,13 @@ JoyFlix 仓库是公开的，TV 是私有的：逐文件迁入前要检查素材
 5. 未来弹幕和 Agnes 审核分为独立服务层，先有合规使用和用户内容保护验证再公开上线。
 
 阶段状态：P0 备份已完成；P1 独立 SourceHub 协议提交；整站迁移、真实多片源验证和安卓 APK 均尚未完成。
+
+
+## 2026-10-27 / 第二批：迁移分支已接入独立 API，但尚未替换旧 Web
+
+- 新增只读 src/app/api/v2/sourcehub/search 和 src/app/api/v2/sourcehub/detail API。
+- 使用 SourceHub 统一编排，通过精确已批准的源与作品白名单，限定请求为 HTTPS、JSON、最多512KB，禁止重定向，单请求超时4.5秒。
+- 没有准入来源时 HTTP 503 明确返回 sourcehub_no_approved_sources，不会偷偷降级到旧 JoyFlix 接口或任何 TVBox Spider。
+- 搜索只返回作品和线路数量，不向普通搜索客户端暴露带 token 的媒体 URL；具体播放线路需在已批准的详情请求中读取。
+- 当前真正接通的是 SourceHub 受控 API 的数据路径和假上游回归；APPROVED_SOURCES 仍为空。仍未对接外部真实 CMS，也未移植 TV 私有整站前端。
+- 在未完成 DNS/出口白名单、网络重绑定防护前，不允许加入实时生产上游。

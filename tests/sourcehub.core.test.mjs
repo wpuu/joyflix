@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   APPROVED_SOURCES, canUseWork, cmsSearchRequest, isSourceApproved,
   normalizeCmsItem, normalizeCmsSearch, validateMediaUrl,
+  cmsDetailRequest, searchSourceHub, detailSourceHub, readApprovedCmsJson,
 } from "../src/lib/sourcehub/core.ts";
 
 function fixture(overrides={}) {
@@ -92,4 +93,47 @@ test("search plans are bounded and never run network requests",()=>{
   assert.equal(url.searchParams.get("ac"),"videolist");
   assert.equal(cmsSearchRequest(fixture(),"中".repeat(81),today),null);
   assert.equal(cmsSearchRequest(fixture({status:"pending"}),"a",today),null);
+});
+
+test("network adapter is never called when there is no approved source",async()=>{
+  let calls=0;
+  const transport=async()=>{calls++; throw Error("must not be used")};
+  assert.deepEqual(await searchSourceHub("电影",today,[],transport),[]);
+  assert.equal(await detailSourceHub("unknown","42",today,[],transport),null);
+  assert.equal(calls,0);
+});
+test("search calls exact approved CMS only, normalized works only",async()=>{
+  const seen=[];
+  const transport=async(url,init)=>{
+    seen.push({url,init});
+    return Response.json({list:[
+      {vod_id:"42",vod_name:"许可影片",vod_play_url:"正片$https://video.example.org/film.m3u8"},
+      {vod_id:"777",vod_name:"没有许可"}
+    ]});
+  };
+  const items=await searchSourceHub(" 影片 ",today,[fixture(),fixture({status:"pending"})],transport);
+  assert.deepEqual(items.map(x=>x.workId),["42"]);
+  assert.equal(seen.length,1);
+  assert.equal(new URL(seen[0].url).hostname,"api.example.org");
+  assert.equal(seen[0].init.redirect,"manual");
+  assert.equal(seen[0].init.method,"GET");
+});
+test("detail request is approved by exact work and source; no blind fetching",async()=>{
+  const src=fixture();
+  const request=cmsDetailRequest(src,"42",today);
+  assert.equal(new URL(request).searchParams.get("ids"),"42");
+  assert.equal(cmsDetailRequest(src,"777",today),null);
+  let requests=0;
+  const transport=async()=>{requests++;return Response.json({list:[{vod_id:"42",vod_name:"许可影片"}]})};
+  const item=await detailSourceHub(src.id,"42",today,[src],transport);
+  assert.equal(item.title,"许可影片");
+  assert.equal(await detailSourceHub(src.id,"777",today,[src],transport),null);
+  assert.equal(requests,1);
+});
+test("CMS adapter rejects redirects, HTML, malformed JSON and oversized body",async()=>{
+  const url="https://api.example.org/cms?ac=videolist&wd=movie";
+  assert.equal(await readApprovedCmsJson(url,async()=>new Response(null,{status:302,headers:{location:"https://evil.example.org"}})),null);
+  assert.equal(await readApprovedCmsJson(url,async()=>new Response("<html>error</html>",{headers:{"content-type":"text/html"}})),null);
+  assert.equal(await readApprovedCmsJson(url,async()=>new Response("not-json",{headers:{"content-type":"application/json"}})),null);
+  assert.equal(await readApprovedCmsJson(url,async()=>new Response("{}",{headers:{"content-type":"application/json","content-length":"900000"}})),null);
 });
