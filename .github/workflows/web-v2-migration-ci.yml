@@ -1,0 +1,31 @@
+name: Web V2 isolated SourceHub contract tests
+on:
+  push:
+    branches: [feature/web-v2-migration-20261027]
+    paths:
+      - "src/lib/sourcehub/**"
+      - "tests/sourcehub.core.test.mjs"
+      - ".github/workflows/web-v2-migration-ci.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+      - name: Assert independent SourceHub excludes old host and executable scripts
+        shell: bash
+        run: |
+          if grep -R -nE 'wpujoyflix\.vercel\.app|TV_PERSONAL_BACKEND_ORIGIN|child_process|eval\(' src/lib/sourcehub; then
+            echo "Legacy dependency or arbitrary script execution found"
+            exit 1
+          fi
+      - name: Run Node24 TypeScript contract tests without installing dependencies
+        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs
