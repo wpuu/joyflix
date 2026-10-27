@@ -62,3 +62,11 @@ JoyFlix 仓库是公开的，TV 是私有的：逐文件迁入前要检查素材
 - 私有审计交接：https://github.com/wpuu/TV/blob/audit/web-to-joyflix-20261027/docs/WEB_EXPORT_AUDIT_2026-10-27.md。
 
 下一次优先任务：保留生产独立的前提下定位 JoyFlix 分支 Preview 构建日志缺口；逐文件完成新版 TV 页面及原始素材的来源审查；按独立 Next.js16 体系移植 Web V2 并将已有 SourceHub API 接入新版搜索/详情。无授权来源前禁止宣称影视片源已解决。Android FongMi 工作继续在 Web 迁移可验收之后启动。
+
+## 2026-10-28 / 第124轮：隔离 Preview 项目与真实构建门禁
+
+- Vercel 中建立单独项目 `joyflix-web-v2-preview`，Project ID `prj_Rsb44MGU9x6aEd6IqgR4A4MawFrX`，SSO保护 all，**未绑定自定义域名、未关联Git仓库、未进行生产部署**。
+- 原 `joyflix` Vercel 项目 ID `prj_EUzmQpHGHpDZy6VDHZ2ao8LInC10` 中，旧 main 与本迁移分支均出现了早期 Vercel CLI 中止错误，不能认定由 SourceHub 引起；日志仅有泛化错误及依赖安装开始，根因仍待定。
+- 在迁移分支的 `next.config.js` 加入新 Web V2 Preview-only 门禁：只有指定项目、分支、`VERCEL_ENV=preview` 与 `VERCEL_TARGET_ENV=preview` 同时成立才能编译迁移分支；原旧项目即使自动创建本分支 Preview，也必须失败。
+- GitHub CI 增加模拟老项目 Preview 拒绝、错误 production 目标拒绝、正确隔离 Preview 允许三种真实 next.config 加载断言；默认本地构建仍适用。
+- 不修改原生产分支、旧Vercel项目环境和域名，不公开 TV 私有全量源码；进一步部署需要在新项目核实仅 Preview 和正确 SHA。

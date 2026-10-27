@@ -10,6 +10,8 @@ on:
       - "src/lib/webv2/player/**"
       - "tests/webv2.playback.test.mjs"
       - ".github/workflows/web-v2-migration-ci.yml"
+      - "next.config.js"
+      - "tests/webv2.preview-guard.test.mjs"
   workflow_dispatch:
 permissions:
   contents: read
@@ -32,7 +34,7 @@ jobs:
             exit 1
           fi
       - name: Run Node24 TypeScript contract tests without installing dependencies
-        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.routes.test.mjs tests/webv2.playback.test.mjs
+        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.routes.test.mjs tests/webv2.playback.test.mjs tests/webv2.preview-guard.test.mjs
 
   legacy-build-audit:
     needs: contract
@@ -49,6 +51,31 @@ jobs:
         run: |
           npm install --global pnpm@10.14.0 --ignore-scripts --no-audit --no-fund
           pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify preview-only migration build guard in actual Next config
+        shell: bash
+        run: |
+          set -euo pipefail
+          if VERCEL=1 VERCEL_PROJECT_ID=prj_EUzmQpHGHpDZy6VDHZ2ao8LInC10 \
+            VERCEL_ENV=preview VERCEL_TARGET_ENV=preview \
+            VERCEL_GIT_COMMIT_REF=feature/web-v2-migration-20261027 \
+            node -e 'require("./next.config.js")' > /tmp/web-v2-guard-denied 2>&1; then
+            echo "FAIL: old production-linked project allowed migration build"
+            exit 1
+          fi
+          grep -q WEB_V2_PREVIEW_ONLY_BUILD_BLOCKED /tmp/web-v2-guard-denied
+          if VERCEL=1 VERCEL_PROJECT_ID=prj_Rsb44MGU9x6aEd6IqgR4A4MawFrX \
+            VERCEL_ENV=production VERCEL_TARGET_ENV=production \
+            VERCEL_GIT_COMMIT_REF=feature/web-v2-migration-20261027 \
+            node -e 'require("./next.config.js")' > /tmp/web-v2-guard-denied 2>&1; then
+            echo "FAIL: misclassified production target allowed"
+            exit 1
+          fi
+          grep -q WEB_V2_PREVIEW_ONLY_BUILD_BLOCKED /tmp/web-v2-guard-denied
+          VERCEL=1 VERCEL_PROJECT_ID=prj_Rsb44MGU9x6aEd6IqgR4A4MawFrX \
+            VERCEL_ENV=preview VERCEL_TARGET_ENV=preview \
+            VERCEL_GIT_COMMIT_REF=feature/web-v2-migration-20261027 \
+            node -e 'require("./next.config.js")'
+          echo "WEB_V2_PREVIEW_GUARD_CI_PASS"
       - name: Generate old-site read-only local app assets
         run: |
           node scripts/convert-config.js
