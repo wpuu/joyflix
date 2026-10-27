@@ -163,7 +163,9 @@ test("explicitly reviewed canonical ID merges multiple legal sources, but not an
   const remake=normalizeCmsItem({vod_id:"43",vod_name:"作品",vod_year:"2019"},second,today);
   const groups=groupSourcehubFilms([a,b,remake]);
   assert.equal(groups.length,2);
-  assert.equal(groups[0].id,common);
+  assert.equal(groups[0].id,common+"@2001");
+  assert.equal(groups[1].id,common+"@2019");
+  assert.notEqual(groups[0].id,groups[1].id);
   assert.equal(groups[0].sourceCount,2);
   assert.equal(groups[0].lineCount,2);
   assert.equal(groups[1].sourceCount,1);

@@ -174,7 +174,7 @@ export function groupSourcehubFilms(items: readonly SourceFilm[]): SourceGroup[]
     const key = item.canonicalId + "|" + String(item.year);
     let group=map.get(key);
     if(!group){
-      group={id:item.canonicalId,title:item.title,year:item.year,
+      group={id:item.canonicalId+"@"+String(item.year),title:item.title,year:item.year,
         sourceId:item.sourceId,workId:item.workId,refs:[]};
       map.set(key,group);
     }
