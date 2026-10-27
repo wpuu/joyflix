@@ -183,7 +183,7 @@ export function groupSourcehubFilms(items: readonly SourceFilm[]): SourceGroup[]
       sourceId:item.sourceId,workId:item.workId,lineCount:item.lines.length
     });
   }
-  return [...map.values()].slice(0,100).map(g=>({
+  return Array.from(map.values()).slice(0,100).map(g=>({
     id:g.id,title:g.title,year:g.year,sourceId:g.sourceId,workId:g.workId,
     sourceCount:g.refs.length,lineCount:g.refs.reduce((total,r)=>total+r.lineCount,0),
     refs:g.refs
