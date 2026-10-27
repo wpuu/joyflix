@@ -49,3 +49,16 @@ JoyFlix 仓库是公开的，TV 是私有的：逐文件迁入前要检查素材
 - 将这两份明确无 API 凭据、媒体 URL 和第三方影视数据的源文件移植到公开 JoyFlix 迁移分支的 src/lib/webv2/player/ 下。保留代码功能，未接到生产播放器，不复制第三方海报/片源或整个私有仓库。
 - 新增独立跨仓库回归 tests/webv2.playback.test.mjs，覆盖移动端 MSE 和 Safari 的HLS引擎选择、首帧缓冲、跳播伪进度、防错误泄露。
 - 此次仅移植纯逻辑，不表示已经将新 TV 的所有 UI/播放器组装到旧站。完整转移需 Next16 对比与安全/素材核准。
+
+## 2026-10-27 / CI验收及在线预览审计
+
+- 最新业务提交 5fe1c720f629892ae9a6821a39a066f0003725a6。
+- 独立 GitHub Actions #40533175319：https://github.com/wpuu/joyflix/actions/runs/40533175319，completed/success。
+- 契约测试：19/19通过；旧 Next.js14 整站构建成功；真实回环 HTTP 服务对 /api/v2/sourcehub/search 无已核准源拒绝503，对详情无效来源拒绝400；日志含 WEB_V2_SOURCEHUB_ROUTE_FAIL_CLOSED_PASS。
+- 这只证明 GitHub Runner 本地应用构建、接口和已迁移两份播放纯逻辑正确，不证明新版 TV 界面已迁入或任何第三方影片已播放成功。
+- 新建的 Vercel JoyFlix 迁移分支 Preview dpl_9ic24L5S3EyqK3EimSU5CYWp7pYJ 状态 ERROR。已回读的构建事件包括 Vercel CLI65.1.0、pnpm-lock9、Installing dependencies...，唯一明确错误文本为 “The build reported a problem and the deployment can not continue. Exiting now.”。相同错误在本次迁移分支的更早提交也出现，目前没有取得可据此确认根因的详细构建栈。不得把 GitHub CI 成功写成 Vercel Preview READY，也不应盲目更改生产项目配置或无限重试。
+- 生产别名 wpujoyflix.vercel.app 已读回仍映射旧 READY deployment dpl_FeD6QjKhiPruz8pJFgaT4YCdYZpk / 源码 3b1c02d；旧 main 未改变。
+- TV 私有代码跨仓库自动审计 #40532699164：https://github.com/wpuu/TV/actions/runs/40532699164；扫描210文本、4二进制素材待许可证审核、未发现预设密钥特征；旧上游主机、个人后端与豆瓣素材依赖仍在源树中。不能以此审计直接批准全私有文件公开。
+- 私有审计交接：https://github.com/wpuu/TV/blob/audit/web-to-joyflix-20261027/docs/WEB_EXPORT_AUDIT_2026-10-27.md。
+
+下一次优先任务：保留生产独立的前提下定位 JoyFlix 分支 Preview 构建日志缺口；逐文件完成新版 TV 页面及原始素材的来源审查；按独立 Next.js16 体系移植 Web V2 并将已有 SourceHub API 接入新版搜索/详情。无授权来源前禁止宣称影视片源已解决。Android FongMi 工作继续在 Web 迁移可验收之后启动。
