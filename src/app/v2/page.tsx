@@ -11,10 +11,21 @@ export default function WebV2Home() {
   const [keyword,setKeyword]=useState("");
   const [state,setState]=useState<QueryState>("idle");
   const [items,setItems]=useState<SearchEntry[]>([]);
+  const [featured,setFeatured]=useState<SearchEntry[]>([]);
   const [notice,setNotice]=useState("");
   const pending=useRef<AbortController|null>(null);
 
   useEffect(()=>()=>pending.current?.abort(),[]);
+  useEffect(()=>{
+    const controller=new AbortController();
+    void fetch("/api/v2/sourcehub/featured",{signal:controller.signal,cache:"no-store"})
+      .then(async response=>response.ok?await response.json() as {items?:SearchEntry[]}:null)
+      .then(payload=>{if(!controller.signal.aborted && Array.isArray(payload?.items))
+        setFeatured(payload.items);})
+      .catch(()=>undefined);
+    return ()=>controller.abort();
+  },[]);
+  const displayed=state==="idle"?featured:items;
 
   async function search(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,7 +91,8 @@ export default function WebV2Home() {
         </h1>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
           新版保留原 TV 的移动端体验，将搜索、详情、线路和播放器接入独立 SourceHub。
-          当前只允许经过内容使用审核的来源；不会回退旧站或使用未知采集接口。
+          个人隔离预览已接入两部 CC BY 完整电影供验收；不会回退旧站或使用未知采集接口。
+          Commons 仅作为短期测试交付，不是正式商用 CDN。
         </p>
         <form onSubmit={search} className="mt-8 flex flex-col gap-3 sm:flex-row">
           <label className="flex-1">
@@ -100,19 +112,19 @@ export default function WebV2Home() {
 
       <section aria-label="SourceHub 查询结果" className="border-t border-white/10 pt-7">
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">已核准来源</h2>
-          <span className="text-xs text-slate-400">{items.length} 部作品</span>
+          <h2 className="text-xl font-semibold">{state==="idle"&&featured.length?"完整授权短片样本":"搜索结果"}</h2>
+          <span className="text-xs text-slate-400">{displayed.length} 部作品</span>
         </div>
-        {state==="idle"?(
+        {state==="idle"&&!featured.length?(
           <p className="rounded-xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
             片源中心已具备独立接口。输入片名后将查询当前批准的来源，不以模拟片目冒充真实片库。
           </p>
         ):null}
         {notice?<p role="status" className="rounded-xl border border-amber-300/20 bg-amber-200/5 p-5 text-sm text-amber-100">{notice}</p>:null}
         {state==="loading"?<p role="status" className="text-sm text-slate-300">查询中…</p>:null}
-        {items.length?(
+        {displayed.length?(
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {items.map(item=>(
+            {displayed.map(item=>(
               <Link key={item.id+"|"+item.year}
                 href={"/v2/watch?source="+encodeURIComponent(item.sourceId)+"&id="+encodeURIComponent(item.workId)}
                 className="group rounded-xl border border-white/10 bg-[#1d2633] p-3 transition hover:border-amber-300/50">

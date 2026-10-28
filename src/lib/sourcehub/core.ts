@@ -42,6 +42,15 @@ export interface SourceFilm {
   title: string;
   year: number;
   lines: readonly PlayLine[];
+  rights?: {
+    credit: string;
+    licenseName: string;
+    licenseUrl: string;
+    evidenceUrl: string;
+    filePageUrl: string;
+    deliveryNotice: string;
+  };
+  previewOnly?: boolean;
 }
 // Production remains closed until a specific work and its delivery rights pass review.
 export const APPROVED_SOURCES: readonly SourceDefinition[] = [];
@@ -328,4 +337,129 @@ export async function detailSourceHub(
   if (!payload) return null;
   const item = normalizeCmsSearch(payload, source, today).find(x => x.workId === id);
   return item ?? null;
+}
+
+
+/**
+ * Hand-reviewed OPEN MOVIE samples in the private Web V2 Preview only.
+ * This is not a default production approved-source list, and not a public CDN
+ * contract with Wikimedia. Credits and source pages are shown next to player.
+ * The 2026-12-31 validity bound is an internal re-review date, not an expiry of
+ * Blender's Creative Commons copyright license.
+ */
+export function previewOpenFilmsEnabled(env:Record<string,string|undefined>):boolean {
+  if(env.NODE_ENV==="development" && !env.VERCEL)return true;
+  return env.NODE_ENV==="production" && env.VERCEL_ENV==="preview" &&
+    env.VERCEL_TARGET_ENV==="preview" &&
+    env.VERCEL_PROJECT_ID==="prj_Rsb44MGU9x6aEd6IqgR4A4MawFrX" &&
+    env.VERCEL_GIT_COMMIT_REF==="feature/web-v2-migration-20261027";
+}
+
+interface OpenFilmRecord {
+  source: SourceDefinition;
+  id: string;
+  title: string;
+  searchAliases: readonly string[];
+  year: number;
+  mediaUrl: string;
+  credit: string;
+  licenseName: "CC BY 3.0" | "CC BY 4.0";
+  licenseUrl: string;
+  filePageUrl: string;
+}
+const COMMONS_HOST="upload.wikimedia.org";
+const REVIEW_DATE="2026-12-31";
+const openFilmRecords: readonly OpenFilmRecord[]=[
+  {
+    source:{
+      id:"blender-spring",name:"Blender Spring（Commons 展示源）",kind:"direct-file",
+      endpoint:"https://upload.wikimedia.org/wikipedia/commons/a/a5/Spring_-_Blender_Open_Movie.webm",
+      allowedApiHost:COMMONS_HOST,allowedMediaHosts:[COMMONS_HOST],status:"approved",
+      approval:{
+        rightsHolder:"Blender Foundation",
+        rightsEvidenceUrl:"https://studio.blender.org/projects/spring/pages/about/",
+        permittedUse:"playback",expiresOn:REVIEW_DATE,approvedWorkIds:["spring2019"],
+        canonicalWorkIds:{"spring2019":"own:blender-spring"}
+      }
+    },
+    id:"spring2019",title:"Spring（春）",
+    searchAliases:["spring","春","blender","开放电影"],year:2019,
+    mediaUrl:"https://upload.wikimedia.org/wikipedia/commons/a/a5/Spring_-_Blender_Open_Movie.webm",
+    credit:"© Blender Foundation | cloud.blender.org/spring",
+    licenseName:"CC BY 4.0",licenseUrl:"https://creativecommons.org/licenses/by/4.0/",
+    filePageUrl:"https://commons.wikimedia.org/wiki/File:Spring_-_Blender_Open_Movie.webm"
+  },
+  {
+    source:{
+      id:"blender-bunny",name:"Blender Big Buck Bunny（Commons 展示源）",kind:"direct-file",
+      endpoint:"https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm",
+      allowedApiHost:COMMONS_HOST,allowedMediaHosts:[COMMONS_HOST],status:"approved",
+      approval:{
+        rightsHolder:"Blender Foundation",
+        rightsEvidenceUrl:"https://peach.blender.org/about/",
+        permittedUse:"playback",expiresOn:REVIEW_DATE,approvedWorkIds:["bunny2008"],
+        canonicalWorkIds:{"bunny2008":"own:blender-big-buck-bunny"}
+      }
+    },
+    id:"bunny2008",title:"Big Buck Bunny（大雄兔）",
+    searchAliases:["big buck bunny","bunny","大兔","大雄兔","blender","开放电影"],year:2008,
+    mediaUrl:"https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm",
+    credit:"© copyright 2008, Blender Foundation / www.bigbuckbunny.org；展示完整原片片尾署名",
+    licenseName:"CC BY 3.0",licenseUrl:"https://creativecommons.org/licenses/by/3.0/",
+    filePageUrl:"https://commons.wikimedia.org/wiki/File:Big_Buck_Bunny_alt.webm"
+  }
+];
+
+/** Never fetch media here; output a link only for explicitly reviewed files. */
+function normalizeReviewedOpenFilm(row:OpenFilmRecord,today:string):SourceFilm|null {
+  if(!isSourceApproved(row.source,today) || row.source.kind!=="direct-file" ||
+      !canUseWork(row.source,row.id,today))return null;
+  if(row.mediaUrl!==row.source.endpoint)return null;
+  const media=validateMediaUrl(row.mediaUrl,row.source);
+  if(!media || media.format!=="webm")return null;
+  const filePage=httpsUrl(row.filePageUrl);
+  const license=httpsUrl(row.licenseUrl);
+  if(!filePage || filePage.hostname!=="commons.wikimedia.org" ||
+     !license || license.hostname!=="creativecommons.org" ||
+     !/^(?:CC BY 3\.0|CC BY 4\.0)$/.test(row.licenseName))return null;
+  return {
+    key:"source:"+row.source.id+":"+row.id,
+    sourceId:row.source.id,workId:row.id,
+    canonicalId:canonicalIdForWork(row.source,row.id),
+    title:row.title,year:row.year,previewOnly:true,
+    lines:[{id:row.source.id+":original",name:"Commons 原片 WebM",
+      episodes:[{index:1,label:"完整影片",mediaUrl:media.url,format:media.format}]}],
+    rights:{
+      credit:row.credit,licenseName:row.licenseName,licenseUrl:license.href,
+      evidenceUrl:row.source.approval.rightsEvidenceUrl,filePageUrl:filePage.href,
+      deliveryNotice:"仅用于登录保护的个人验收；Wikimedia Commons 并非本站商用 CDN。原片保留片尾字幕，本站未重新编辑。"
+    }
+  };
+}
+export function previewOpenFilms(
+  env:Record<string,string|undefined>,today:string,
+):SourceFilm[] {
+  if(!previewOpenFilmsEnabled(env))return [];
+  return openFilmRecords.flatMap(row=>{
+    const film=normalizeReviewedOpenFilm(row,today);
+    return film?[film]:[];
+  });
+}
+export function searchPreviewOpenFilms(
+  keyword:string,env:Record<string,string|undefined>,today:string
+):SourceFilm[]{
+  const query=keyword.normalize("NFKC").toLowerCase().trim();
+  if(!query || query.length>80 || !previewOpenFilmsEnabled(env))return [];
+  const films=previewOpenFilms(env,today);
+  return films.filter(film=>{
+    const row=openFilmRecords.find(r=>r.source.id===film.sourceId && r.id===film.workId);
+    return film.title.toLowerCase().includes(query) ||
+      !!row?.searchAliases.some(alias=>alias.includes(query));
+  });
+}
+export function previewOpenFilmById(
+  sourceId:string,workId:string,env:Record<string,string|undefined>,today:string
+):SourceFilm|null{
+  return previewOpenFilms(env,today)
+    .find(item=>item.sourceId===sourceId && item.workId===workId)??null;
 }

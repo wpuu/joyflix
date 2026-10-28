@@ -84,6 +84,18 @@ export function SourceWatchClient({sourceId,workId}:{sourceId:string;workId:stri
             </div>
             {playbackError?<p role="alert" className="mt-3 rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{playbackError}</p>:null}
             <p className="mt-4 text-xs leading-6 text-slate-400">播放由浏览器直接请求获许可的视频服务。页面不提供视频代理、任意解析脚本或规避付费访问的功能。</p>
+            {film?.rights?(
+              <section className="mt-5 space-y-2 rounded-xl border border-white/15 bg-[#1d2633] p-4 text-xs leading-6 text-slate-300">
+                <h2 className="text-sm font-semibold">影片授权与署名</h2>
+                <p>{film.rights.credit}</p>
+                <p>{film.rights.deliveryNotice}</p>
+                <div className="flex flex-wrap gap-4">
+                  <a href={film.rights.licenseUrl} target="_blank" rel="noopener noreferrer" className="underline">{film.rights.licenseName} 许可证</a>
+                  <a href={film.rights.evidenceUrl} target="_blank" rel="noopener noreferrer" className="underline">版权官方说明</a>
+                  <a href={film.rights.filePageUrl} target="_blank" rel="noopener noreferrer" className="underline">Commons 原始文件页面</a>
+                </div>
+              </section>
+            ):null}
           </div>
           <aside className="space-y-5">
             <div className="rounded-xl border border-white/10 bg-[#1d2633] p-4">

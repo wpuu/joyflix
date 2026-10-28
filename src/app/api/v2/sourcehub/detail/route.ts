@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { APPROVED_SOURCES, detailSourceHub } from '@/lib/sourcehub/core';
+import { APPROVED_SOURCES, detailSourceHub, previewOpenFilmById, previewOpenFilmsEnabled } from '@/lib/sourcehub/core';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,11 +11,17 @@ export async function GET(request: Request) {
     return NextResponse.json({error:'invalid_source_or_id'},
       {status:400,headers:{'Cache-Control':'private, no-store'}});
   }
-  if (!APPROVED_SOURCES.length) {
+  const today = new Date().toISOString().slice(0,10);
+  const preview = previewOpenFilmById(source,id,process.env,today);
+  if(preview){
+    return NextResponse.json({item:preview},{headers:{'Cache-Control':'private, no-store'}});
+  }
+  if (!APPROVED_SOURCES.length && !previewOpenFilmsEnabled(process.env)) {
     return NextResponse.json({error:'sourcehub_no_approved_sources'},
       {status:503,headers:{'Cache-Control':'private, no-store'}});
   }
-  const item = await detailSourceHub(source,id,new Date().toISOString().slice(0,10));
+  const item = APPROVED_SOURCES.length
+    ? await detailSourceHub(source,id,today) : null;
   return item
     ? NextResponse.json({item},{headers:{'Cache-Control':'private, no-store'}})
     : NextResponse.json({error:'not_found'},{status:404,headers:{'Cache-Control':'private, no-store'}});
