@@ -1,0 +1,26 @@
+name: TV129 bounded real-CORS compatibility on nine candidate CMS sources
+on:
+  push:
+    branches: [feature/web-v2-migration-20261027]
+    paths:
+      - "scripts/tv129-live-cms-cors-audit.mjs"
+      - ".github/workflows/tv129-live-cms-cors-audit.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  metadata-only-cors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+      - name: Install headless selenium in ephemeral temp path
+        run: npm install --prefix /tmp/web-v2-selenium selenium-webdriver@4.51.0 --ignore-scripts --no-audit --no-fund
+      - name: Test only CORS/HTTP JSON metadata to pinned public CMS sites in real Chrome
+        timeout-minutes: 3
+        run: node scripts/tv129-live-cms-cors-audit.mjs
