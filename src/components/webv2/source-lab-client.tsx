@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {useEffect,useRef,useState,type FormEvent} from "react";
 import Hls from "hls.js";
+import {SourceConfigLab} from "./source-config-lab";
 import {hlsFailureLabel,mediaErrorLabel,preferNativeHls} from "@/lib/webv2/player/hls-playback-policy";
 import {observedForwardPlayback} from "@/lib/webv2/player/playback-health";
 import {
@@ -47,6 +48,26 @@ export function SourceLabClient(){
     goal.current=null;
     setMethod("待检测");
     setMessage("已选择视频；浏览器开始连接来源。请手动点击视频播放键。");
+  }
+  // This callback executes only after the owner clicks a specific CMS episode.
+  // Never store CMS source URLs in the public SourceHub or browser persistence.
+  function fromCmsEpisode(raw:string){
+    const checked=inspectSourceLabUrl(raw);
+    if(!checked.ok){
+      setMessage("CMS分集不是支持的HTTPS媒体直链，无法直接测试。");
+      return;
+    }
+    counter.current+=1;
+    setSelected({url:checked.url,kind:checked.kind,id:counter.current});
+    setUrlText("");
+    setConfirmed(false);
+    setSeekConfirmed(false);
+    setDuration(null);
+    setFailure("");
+    setCopied("");
+    goal.current=null;
+    setMethod("待检测");
+    setMessage("已选择CMS分集；由浏览器直接请求视频，请手动按播放键。");
   }
   function reset(){
     setSelected(null);
@@ -194,6 +215,7 @@ export function SourceLabClient(){
           视频站可能自行记录访问者IP；HLS.js需要正常跨域响应才能读取清单和分片。
         </p>
       </form>
+      <SourceConfigLab onSelectMedia={fromCmsEpisode}/>
       <section className="overflow-hidden rounded-xl border border-white/15 bg-black">
         {selected?(
           <video key={selected.id} ref={videoRef} controls playsInline preload="none"

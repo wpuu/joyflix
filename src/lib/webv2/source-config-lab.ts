@@ -5,7 +5,7 @@
  * WPU TV server, persist credentials, proxy video or publish candidate sources.
  * Any actual CMS GET must be initiated by the owner in the browser.
  */
-import {inspectSourceLabUrl, type MediaKind} from "./source-lab";
+export type MediaKind="hls"|"mp4"|"webm";
 
 export type ConfigKind = "cms-json"|"cms-xml"|"spider"|"extended-http"|"unknown";
 export type ConfigIssue = "NOT_JSON"|"INVALID_STRUCTURE"|"TOO_LARGE";
@@ -107,7 +107,7 @@ export function inspectTvboxConfig(raw:string):ConfigAudit {
     if(!row)continue;
     const key=textValue(row.key,50);
     const name=textValue(row.name,70)||"未命名站点";
-    const type=row.type;
+    const type=row.type===undefined?0:row.type;
     const kind:ConfigKind=type===0?"cms-xml":type===1?"cms-json":
       type===3?"spider":type===4?"extended-http":"unknown";
     const notes:string[]=[];
@@ -176,6 +176,26 @@ export function makeCmsRequest(
   url.searchParams.set(kind==="search"?"wd":"ids",value);
   return {ok:true,endpoint:url.href};
 }
+/** Resolve only direct browser media. Never decode JS players, execute Spider
+ * or turn a web page into an imaginary MP4/HLS file.
+ */
+function inspectCmsMediaUrl(raw:string):
+  | {ok:true;url:string;kind:MediaKind}
+  | {ok:false} {
+  if(typeof raw!=="string" || raw.length>1800)return {ok:false};
+  try{
+    const video=new URL(raw);
+    if(video.protocol!=="https:"||video.username||video.password||
+      video.port||video.hash)return {ok:false};
+    const host=inspectCmsEndpoint(video.origin+video.pathname);
+    if(!host.ok)return {ok:false};
+    const pathname=video.pathname.toLowerCase();
+    const kind:MediaKind|null=pathname.endsWith(".m3u8")?"hls":
+      pathname.endsWith(".mp4")||pathname.endsWith(".m4v")?"mp4":
+      pathname.endsWith(".webm")?"webm":null;
+    return kind?{ok:true,url:video.href,kind}:{ok:false};
+  }catch{return {ok:false};}
+}
 export function readCmsJsonFilms(payload:unknown):CmsFilm[]|null {
   const root=object(payload);
   if(!root || !Array.isArray(root.list) || root.list.length>1000)
@@ -199,7 +219,7 @@ export function readCmsJsonFilms(payload:unknown):CmsFilm[]|null {
         for(const entry of line.split("#").slice(0,80)){
           const index=entry.indexOf("$");
           if(index===-1)continue;
-          const result=inspectSourceLabUrl(entry.slice(index+1));
+          const result=inspectCmsMediaUrl(entry.slice(index+1));
           if(!result.ok)continue;
           episodes.push({
             label:textValue(entry.slice(0,index),55)||"第"+(episodes.length+1)+"集",

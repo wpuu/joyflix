@@ -3,7 +3,7 @@
 import {useEffect,useRef,useState,type FormEvent} from "react";
 import {
   inspectTvboxConfig,inspectCmsEndpoint,probeCms,tvboxAuditReport,
-  type ConfigAudit,type CmsFilm,type CmsProbeCode,type TvboxSite
+  type ConfigAudit,type CmsFilm,type TvboxSite
 } from "@/lib/webv2/source-config-lab";
 
 const reason:Record<string,string>={
