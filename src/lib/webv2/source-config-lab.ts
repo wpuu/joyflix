@@ -8,7 +8,7 @@
 export type MediaKind="hls"|"mp4"|"webm";
 
 export type ConfigKind = "cms-json"|"cms-xml"|"spider"|"extended-http"|"unknown";
-export type ConfigIssue = "NOT_JSON"|"INVALID_STRUCTURE"|"TOO_LARGE";
+export type ConfigIssue = "NOT_JSON"|"INVALID_STRUCTURE"|"MULTI_REPO_NOT_SUPPORTED"|"TOO_LARGE";
 export interface TvboxSite {
   key:string;
   name:string;
@@ -90,19 +90,69 @@ export function inspectCmsEndpoint(raw:string):EndpointResult {
   }catch{return {ok:false,code:"INVALID_ENDPOINT"};}
 }
 
+
+/** Safe JSONC subset. Removes // and /* * / comments and trailing commas;
+ * strings (including https://) are preserved, no arbitrary JS is evaluated.
+ */
+export function normalizeTvboxJsonc(input:string):string{
+  let out="",str=false,esc=false;
+  for(let i=0;i<input.length;i++){
+    const c=input[i],n=input[i+1];
+    if(str){
+      out+=c;
+      if(esc)esc=false;
+      else if(c==="\\")esc=true;
+      else if(c==='"')str=false;
+    }else if(c==='"'){str=true;out+=c;}
+    else if(c==="/"&&n==="/"){
+      i+=2;
+      while(i<input.length&&input[i]!=="\n"&&input[i]!=="\r")i++;
+      out+="\n";i--;
+    }else if(c==="/"&&n==="*"){
+      i+=2;
+      let closed=false;
+      while(i<input.length-1){
+        if(input[i]==="*"&&input[i+1]==="/"){closed=true;i++;break;}
+        i++;
+      }
+      if(!closed)throw Error("unclosed-comment");
+      out+=" ";
+    }else out+=c;
+  }
+  if(str)throw Error("unclosed-string");
+  let normalized="",quoted=false,escaped=false;
+  for(let i=0;i<out.length;i++){
+    const c=out[i];
+    if(quoted){
+      normalized+=c;
+      if(escaped)escaped=false;
+      else if(c==="\\")escaped=true;
+      else if(c==='"')quoted=false;
+    }else if(c==='"'){quoted=true;normalized+=c;}
+    else if(c===","){
+      let next=i+1;
+      while(next<out.length&&/\s/.test(out[next]))next++;
+      if(out[next]!=="]"&&out[next]!=="}")normalized+=c;
+    }else normalized+=c;
+  }
+  return normalized;
+}
+
 export function inspectTvboxConfig(raw:string):ConfigAudit {
   if(typeof raw!=="string" || raw.length>SOURCE_MAX)
     return {ok:false,code:"TOO_LARGE"};
   let parsed:unknown;
-  try { parsed=JSON.parse(raw); }
+  try { parsed=JSON.parse(normalizeTvboxJsonc(raw.replace(/^\uFEFF/,""))); }
   catch { return {ok:false,code:"NOT_JSON"}; }
   const root=object(parsed);
   const rows=Array.isArray(parsed)?parsed:root?.sites;
+  if(!Array.isArray(rows)&&Array.isArray(root?.urls))
+    return {ok:false,code:"MULTI_REPO_NOT_SUPPORTED"};
   if(!Array.isArray(rows) || rows.length>3000)
     return {ok:false,code:"INVALID_STRUCTURE"};
   const duplicate=new Set<string>(),used=new Set<string>();
   const sites:TvboxSite[]=[];
-  for(const value of rows.slice(0,120)){
+  for(const value of rows.slice(0,300)){
     const row=object(value);
     if(!row)continue;
     const key=textValue(row.key,50);
@@ -139,7 +189,7 @@ export function inspectTvboxConfig(raw:string):ConfigAudit {
       site.probeEligible=false;
     }
   }
-  return {ok:true,sites,total:rows.length,truncated:rows.length>120};
+  return {ok:true,sites,total:rows.length,truncated:rows.length>300};
 }
 
 export function tvboxAuditReport(audit:ConfigAudit):string {
