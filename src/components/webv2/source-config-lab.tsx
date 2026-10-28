@@ -5,6 +5,22 @@ import {
   inspectTvboxConfig,inspectCmsEndpoint,probeCms,tvboxAuditReport,
   type ConfigAudit,type CmsFilm,type TvboxSite
 } from "@/lib/webv2/source-config-lab";
+import {probeRemoteConfig} from "@/lib/webv2/source-config-remote";
+
+
+const remoteErrors:Record<string,string>={
+  INVALID_URL:"请输入标准 HTTPS 单仓配置链接，不支持凭证、端口或片段",
+  PRIVATE_ADDRESS:"不允许IP地址、回环或内网地址",
+  QUERY_NOT_ALLOWED:"订阅链接包含 ? 查询参数，可能泄露访问令牌，已拒绝",
+  CORS_OR_NETWORK:"源站不允许浏览器跨域读取，或网络连接失败",
+  CANCELLED:"请求已取消",TIMEOUT:"远程配置10秒内未返回",
+  HTTP_ERROR:"源站HTTP状态失败",TOO_LARGE:"配置文件超过128KB安全上限",
+  INVALID_CONTENT_TYPE:"返回内容不是受支持的JSON或纯文本",
+  INVALID_BODY:"远程响应没有可读文件",
+  NOT_JSON:"不是支持的JSON/JSONC配置",
+  INVALID_STRUCTURE:"没有有效的sites站点列表",
+  MULTI_REPO_NOT_SUPPORTED:"这是多仓 urls 列表：请先选择其中的单仓，暂不递归访问"
+};
 
 const reason:Record<string,string>={
   XML_HTTP_NOT_SUPPORTED:"XML接口：当前浏览器实验室仅支持JSON",
@@ -31,6 +47,9 @@ export function SourceConfigLab({onSelectMedia}:{
   onSelectMedia:(mediaUrl:string)=>void;
 }){
   const [rawConfig,setRawConfig]=useState("");
+  const [remoteUrl,setRemoteUrl]=useState("");
+  const [remoteLoading,setRemoteLoading]=useState(false);
+  const [onlyEligible,setOnlyEligible]=useState(false);
   const [audit,setAudit]=useState<ConfigAudit|null>(null);
   const [endpoint,setEndpoint]=useState("");
   const [showEndpoint,setShowEndpoint]=useState(false);
@@ -41,20 +60,54 @@ export function SourceConfigLab({onSelectMedia}:{
   const [diagnostic,setDiagnostic]=useState("");
   const [copied,setCopied]=useState("");
   const pending=useRef<AbortController|null>(null);
+  const remotePending=useRef<AbortController|null>(null);
 
-  useEffect(()=>()=>pending.current?.abort(),[]);
+  useEffect(()=>()=>{pending.current?.abort();remotePending.current?.abort();},[]);
+
+  async function importRemote(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();
+    remotePending.current?.abort();
+    const controller=new AbortController();
+    remotePending.current=controller;
+    setRemoteLoading(true);
+    setCopied("");
+    setDiagnostic("浏览器正在读取一份远程配置，不会访问其中列出的影视站点。");
+    const result=await probeRemoteConfig(remoteUrl,fetch,controller.signal);
+    if(controller.signal.aborted)return;
+    remotePending.current=null;
+    setRemoteLoading(false);
+    setRemoteUrl("");
+    setFilms([]);
+    setEndpoint("");
+    setSelectedName("");
+    setPhase("idle");
+    if(!result.ok){
+      setAudit(null);
+      setDiagnostic(remoteErrors[result.code]||"远程配置读取失败");
+      return;
+    }
+    setAudit(result.audit);
+    setRawConfig("");
+    setOnlyEligible(true);
+    setDiagnostic("已读取并分析 "+result.audit.total+
+      " 个站点。可手动测试的JSON HTTP只是格式候选，并非真实播放或版权证明。");
+  }
+
   function analyze(e:FormEvent<HTMLFormElement>){
     e.preventDefault();
     pending.current?.abort();
     const next=inspectTvboxConfig(rawConfig);
     setAudit(next);
+    setOnlyEligible(false);
     setRawConfig("");
     setCopied("");
     setFilms([]);
     setDiagnostic(next.ok
       ?"只进行本地JSON结构识别；不会执行Spider、读取网络或导入公共片库。"
       :next.code==="NOT_JSON"?"不是有效JSON，请粘贴TVBox配置中的sites数组。":
-       next.code==="TOO_LARGE"?"配置内容超过128KB限制。":"未找到有效的sites站点列表。");
+       next.code==="TOO_LARGE"?"配置内容超过128KB限制。":
+       next.code==="MULTI_REPO_NOT_SUPPORTED"?"多仓 urls 订阅请先选择单仓，本页不会递归抓取。":
+       "未找到有效的sites站点列表。");
   }
   function choose(site:TvboxSite){
     if(!site.probeEligible || !site.endpoint)return;
@@ -122,6 +175,11 @@ export function SourceConfigLab({onSelectMedia}:{
       :"详情已读取，但没有直接支持的HLS/MP4/WebM媒体；可能需要第三方解析器。");
   }
   function reset(){
+    remotePending.current?.abort();
+    remotePending.current=null;
+    setRemoteLoading(false);
+    setRemoteUrl("");
+    setOnlyEligible(false);
     pending.current?.abort();
     pending.current=null;
     setRawConfig("");
@@ -156,8 +214,24 @@ export function SourceConfigLab({onSelectMedia}:{
           仅测试您有合法访问权限的来源。
         </p>
       </header>
+      <form onSubmit={e=>{void importRemote(e);}} className="space-y-3 border-b border-white/10 pb-5">
+        <label htmlFor="tvbox-remote-url" className="block font-medium">1. 远程单仓 TVBox 订阅地址</label>
+        <input id="tvbox-remote-url" value={remoteUrl} type="password"
+          onChange={e=>setRemoteUrl(e.target.value)}
+          placeholder="https://raw.githubusercontent.com/.../config.json"
+          autoComplete="off" spellCheck={false}
+          className="h-11 w-full rounded-lg border border-white/20 bg-[#101720] px-3 text-xs outline-none"/>
+        <button type="submit" disabled={!remoteUrl.trim()||remoteLoading}
+          className="rounded-lg bg-amber-200 px-5 py-2.5 font-semibold text-slate-900 disabled:opacity-40">
+          {remoteLoading?"正在读取配置…":"手动读取远程 TVBox 配置"}
+        </button>
+        <p className="text-xs leading-6 text-slate-400">
+          只读单份HTTPS JSON/JSONC配置，最多128KB，不能带查询令牌；浏览器直连，需源站允许CORS。
+          不访问多仓中的其他网址、不执行Spider插件，也不存储订阅信息。
+        </p>
+      </form>
       <form onSubmit={analyze} className="space-y-3 border-b border-white/10 pb-5">
-        <label htmlFor="tvbox-raw" className="block font-medium">1. 粘贴 TVBox/FongMi 配置 JSON</label>
+        <label htmlFor="tvbox-raw" className="block font-medium">或：直接粘贴 TVBox/FongMi JSON/JSONC 配置</label>
         <textarea id="tvbox-raw" value={rawConfig} rows={5} maxLength={128000}
           onChange={e=>setRawConfig(e.target.value)} autoComplete="off" spellCheck={false}
           placeholder='{"sites":[{"key":"licensed","name":"许可 CMS","type":1,"api":"https://example.org/api.php/provide/vod/"}]}'
@@ -175,7 +249,14 @@ export function SourceConfigLab({onSelectMedia}:{
           <div className="space-y-2">
             <p className="font-medium">{audit.ok
               ?"共 "+audit.total+" 个来源，已扫描 "+audit.sites.length+" 个":"配置识别失败："+audit.code}</p>
-            {audit.ok?audit.sites.map((site,index)=>(
+            {audit.ok && audit.sites.some(s=>s.probeEligible)?(
+              <label className="flex items-center gap-2 border border-white/10 rounded-lg p-2 text-xs">
+                <input type="checkbox" checked={onlyEligible}
+                  onChange={e=>setOnlyEligible(e.target.checked)}/>
+                只看可手动测试的 JSON HTTP（{audit.sites.filter(s=>s.probeEligible).length}个）
+              </label>
+            ):null}
+            {audit.ok?audit.sites.filter(s=>!onlyEligible||s.probeEligible).map((site,index)=>(
               <div key={site.key+":"+index}
                 className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
                 <div className="min-w-0 flex-1">
