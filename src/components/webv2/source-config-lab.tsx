@@ -5,7 +5,7 @@ import {
   inspectTvboxConfig,inspectCmsEndpoint,probeCms,tvboxAuditReport,
   type ConfigAudit,type CmsFilm,type TvboxSite
 } from "@/lib/webv2/source-config-lab";
-import {probeRemoteConfig} from "@/lib/webv2/source-config-remote";
+import {probeRemoteConfig} from "@/lib/webv2/source-config-lab";
 
 
 const remoteErrors:Record<string,string>={
