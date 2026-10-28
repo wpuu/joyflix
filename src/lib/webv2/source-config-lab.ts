@@ -391,12 +391,12 @@ export function inspectRemoteConfigUrl(raw:string):
   return {ok:true,url:url.href};
 }
 
-type Transport=(input:string,init:RequestInit)=>Promise<Response>;
+type RemoteTransport=(input:string,init:RequestInit)=>Promise<Response>;
 /** User click only. The caller must not supply source URLs through SSR or URLs
  * in the current website's query string.
  */
 export async function probeRemoteConfig(
-  input:string,transport:Transport=fetch,signal?:AbortSignal
+  input:string,transport:RemoteTransport=fetch,signal?:AbortSignal
 ):Promise<RemoteResult>{
   const checked=inspectRemoteConfigUrl(input);
   if(!checked.ok)return checked;
