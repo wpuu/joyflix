@@ -116,3 +116,40 @@ jobs:
           curl -fsS --max-time 7 'http://127.0.0.1:3187/v2/watch?source=samplecms&id=42' | grep -q '影片播放页'
           echo "WEB_V2_ROUTE_SHELL_SMOKE_PASS"
           echo "WEB_V2_SOURCEHUB_ROUTE_FAIL_CLOSED_PASS"
+      - name: HTTP smoke reviewed full open films on exact private Preview runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERCEL=1 VERCEL_ENV=preview VERCEL_TARGET_ENV=preview \
+          VERCEL_PROJECT_ID=prj_Rsb44MGU9x6aEd6IqgR4A4MawFrX \
+          VERCEL_GIT_COMMIT_REF=feature/web-v2-migration-20261027 \
+            pnpm exec next start --hostname 127.0.0.1 --port 3188 > /tmp/web-v2-preview-run.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..40}; do
+            if curl -fsS --max-time 2 http://127.0.0.1:3188/v2 > /dev/null 2>&1; then break; fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then tail -n 35 /tmp/web-v2-preview-run.log; exit 1; fi
+            sleep 1
+          done
+          node --input-type=module <<'NODE'
+          const base="http://127.0.0.1:3188";
+          const featured=await fetch(base+"/api/v2/sourcehub/featured");
+          if(featured.status!==200)throw Error("featured not 200");
+          const f=await featured.json();
+          if(f.items?.length!==2)throw Error("not two real licensed open films");
+          if(/mediaUrl|upload.wikimedia|token=/i.test(JSON.stringify(f)))throw Error("featured list leaked playback data");
+          for(const item of f.items){
+            const q=await fetch(base+"/api/v2/sourcehub/search?keyword="+encodeURIComponent(item.title.split("（")[0]));
+            const sr=await q.json();
+            if(q.status!==200 || sr.items.length<1)throw Error("search did not find full film");
+            const url=base+"/api/v2/sourcehub/detail?source="+encodeURIComponent(item.sourceId)+"&id="+encodeURIComponent(item.workId);
+            const res=await fetch(url);
+            const d=await res.json();
+            if(res.status!==200 || !d.item?.lines?.[0]?.episodes?.[0]?.mediaUrl?.endsWith(".webm") ||
+              !d.item?.rights?.credit?.includes("Blender Foundation"))throw Error("rights-backed detail missing");
+          }
+          const missing=await fetch(base+"/api/v2/sourcehub/detail?source=blender-spring&id=bunny2008");
+          if(missing.status!==404)throw Error("misbound cross-film ID not rejected");
+          console.log("WEB_V2_TWO_REAL_OPEN_FILMS_HTTP_CHAIN_PASS");
+          NODE
+
