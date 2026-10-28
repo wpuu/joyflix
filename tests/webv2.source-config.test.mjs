@@ -42,10 +42,11 @@ test("duplicate keys, header overrides, dangerous hosts and massive JSON are not
   assert.equal(inspectTvboxConfig("not javascript").ok,false);
   assert.deepEqual(inspectTvboxConfig("x".repeat(129000)),{ok:false,code:"TOO_LARGE"});
 });
-test("CMSEndpoint strips untrusted query credentials and forbids internal/private destinations",()=>{
+test("CMSEndpoint refuses query strings instead of silently changing source semantics",()=>{
   const r=inspectCmsEndpoint("https://cms.example.org/api.php/provide/vod/?token=PRIVATE");
-  assert.equal(r.ok,true);
-  if(r.ok)assert.equal(r.endpoint,"https://cms.example.org/api.php/provide/vod/");
+  assert.deepEqual(r,{ok:false,code:"QUERY_UNSUPPORTED"});
+  assert.equal(inspectCmsEndpoint("https://cms.example.org/api.php/provide/vod/?ac=videolist").ok,false);
+  assert.equal(inspectCmsEndpoint("https://cms.example.org/api.php/provide/vod/").ok,true);
   for(const value of [
     "http://cms.example.org/vod","https://127.0.0.1/vod",
     "https://localhost/vod","https://cms.example.org:8443/vod",
@@ -110,4 +111,21 @@ test("all configuration UI and CMS data remain local to private SourceLab and op
   assert.match(client,/onSelectMedia\(episode.mediaUrl\)/);
   assert.match(parent,/SourceConfigLab onSelectMedia=\{fromCmsEpisode\}/);
   assert.doesNotMatch(client,/localStorage|sessionStorage|document.cookie|eval\(|new Function|iframe|\/api\/v2\/sourcehub/);
+});
+
+test("query-bearing TVBox JSON endpoints are not silently counted as usable",()=>{
+  const audit=inspectTvboxConfig(JSON.stringify({sites:[
+    {key:"safe",name:"Clean JSON",type:1,api:"https://a.example.org/vod"},
+    {key:"token",name:"Tokenized JSON",type:1,api:"https://b.example.org/vod?token=DO_NOT_EXPOSE"},
+    {key:"flag",name:"CMS with mode flag",type:1,api:"https://c.example.org/vod?ac=videolist"}
+  ]}));
+  assert.equal(audit.ok,true);
+  if(!audit.ok)return;
+  assert.equal(audit.sites.filter(s=>s.probeEligible).length,1);
+  assert.deepEqual(audit.sites.slice(1).map(s=>s.notes.includes("API_QUERY_REQUIRES_REVIEW")),[true,true]);
+  assert.equal(audit.sites[1].endpoint,null);
+  const report=tvboxAuditReport(audit);
+  assert.match(report,/query_parameter_review=2/);
+  assert.doesNotMatch(report,/DO_NOT_EXPOSE|b\.example\.org/);
+  assert.equal(makeCmsRequest("https://b.example.org/vod?token=DO_NOT_EXPOSE","search","test").ok,false);
 });

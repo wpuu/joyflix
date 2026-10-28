@@ -112,3 +112,18 @@ test("remote owner UI requires explicit button press, uses no server API, clears
   assert.match(ui,/只看可手动测试的 JSON HTTP/);
   assert.doesNotMatch(ui,/localStorage|sessionStorage|document\.cookie|\/api\/v2\/sourcehub\/import/);
 });
+
+test("real-world-like aggregate query variants do not inflate browser-compatible count",()=>{
+  const all=Array.from({length:160},(_,i)=>({
+    key:"s"+i,
+    type:i<18?1:3,
+    api:i<9?"https://a"+i+".example.org/api.php/provide/vod/":
+      i<18?"https://b"+i+".example.org/api.php/provide/vod/?at=json":"csp_spider"
+  }));
+  const r=inspectTvboxConfig(JSON.stringify({sites:all}));
+  assert.equal(r.ok,true);
+  if(!r.ok)return;
+  assert.equal(r.sites.filter(s=>s.probeEligible).length,9);
+  assert.equal(r.sites.filter(s=>s.notes.includes("API_QUERY_REQUIRES_REVIEW")).length,9);
+  assert.match(tvboxAuditReport(r),/query_parameter_review=9/);
+});

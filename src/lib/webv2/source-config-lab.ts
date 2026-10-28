@@ -23,7 +23,7 @@ export type ConfigAudit =
   | {ok:false;code:ConfigIssue};
 export type EndpointResult =
   | {ok:true;endpoint:string}
-  | {ok:false;code:"INVALID_ENDPOINT"|"PRIVATE_ADDRESS"};
+  | {ok:false;code:"INVALID_ENDPOINT"|"PRIVATE_ADDRESS"|"QUERY_UNSUPPORTED"};
 
 export interface CmsEpisode {
   label:string;
@@ -65,9 +65,9 @@ function hasValue(raw:unknown):boolean {
   return true;
 }
 
-/** Private networks, IP literals, credentials, ports and fragments are not
- * acceptable. Query params in pasted endpoint are intentionally discarded:
- * credentials in source config are not accepted, even if the API needs them.
+/** Private networks, IP literals, credentials, ports, fragments AND query
+ * strings are not accepted. Query params are not silently discarded: a TVBox
+ * source may need them to work or contain secrets; manual review is required.
  */
 export function inspectCmsEndpoint(raw:string):EndpointResult {
   if(typeof raw!=="string" || raw.length>1800 || raw!==raw.trim())
@@ -83,9 +83,9 @@ export function inspectCmsEndpoint(raw:string):EndpointResult {
       host.endsWith(".internal") || host==="metadata.google.internal") {
       return {ok:false,code:"PRIVATE_ADDRESS"};
     }
-    // This interface intentionally does not copy embedded credentials, flags
-    // or access tokens from arbitrary TVBox configuration endpoints.
-    url.search="";
+    // An endpoint with original query parameters is not equivalent to the
+    // same URL after stripping them. Never certify such a source.
+    if(url.search)return {ok:false,code:"QUERY_UNSUPPORTED"};
     return {ok:true,endpoint:url.href};
   }catch{return {ok:false,code:"INVALID_ENDPOINT"};}
 }
@@ -172,7 +172,8 @@ export function inspectTvboxConfig(raw:string):ConfigAudit {
     if(hasValue(row.playUrl) || hasValue(row.ext) || hasValue(row.header))
       notes.push("EXTERNAL_PARSER_OR_HEADERS");
     const endpoint=typeof row.api==="string"?inspectCmsEndpoint(row.api):{ok:false as const,code:"INVALID_ENDPOINT" as const};
-    if(!endpoint.ok)notes.push("ENDPOINT_UNSUPPORTED");
+    if(!endpoint.ok)notes.push(endpoint.code==="QUERY_UNSUPPORTED"
+      ? "API_QUERY_REQUIRES_REVIEW":"ENDPOINT_UNSUPPORTED");
     if(key && used.has(key))duplicate.add(key);
     if(key)used.add(key);
     sites.push({
@@ -205,6 +206,7 @@ export function tvboxAuditReport(audit:ConfigAudit):string {
     "spider="+count("spider"),
     "extended_http="+count("extended-http"),
     "eligible_browser_probe="+audit.sites.filter(s=>s.probeEligible).length,
+    "query_parameter_review="+audit.sites.filter(s=>s.notes.includes("API_QUERY_REQUIRES_REVIEW")).length,
     "truncated="+(audit.truncated?"YES":"NO"),
     "rights_and_playback=UNVERIFIED"
   ].join("\n");

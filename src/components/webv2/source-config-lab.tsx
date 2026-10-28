@@ -30,7 +30,8 @@ const reason:Record<string,string>={
   INVALID_KEY:"来源标识缺失",SEARCH_DISABLED:"搜索已关闭",
   EXECUTABLE_EXTENSION:"包含脚本执行或点击代码",
   EXTERNAL_PARSER_OR_HEADERS:"依赖解析器、扩展参数或特殊请求头",
-  ENDPOINT_UNSUPPORTED:"接口不是可直接测试的标准HTTPS地址"
+  ENDPOINT_UNSUPPORTED:"接口不是可直接测试的标准HTTPS地址",
+  API_QUERY_REQUIRES_REVIEW:"接口带原始查询参数（可能是模式开关或凭据），不可直接删除后使用，需单独审核"
 };
 const errors:Record<string,string>={
   INVALID_QUERY:"请输入1–80字的关键词，或有效影片ID",
@@ -123,7 +124,9 @@ export function SourceConfigLab({onSelectMedia}:{
     pending.current?.abort();
     const checked=inspectCmsEndpoint(endpoint.trim());
     if(!checked.ok){
-      setDiagnostic("无效接口地址：只接受公开的HTTPS端点，不能携带账号密码、端口或锚点。");
+      setDiagnostic(checked.code==="QUERY_UNSUPPORTED"
+        ?"接口原始查询参数可能是功能或凭据；不能偷偷删掉参数后发送请求。请改用无需参数的已授权CMS接口。"
+        :"无效接口地址：只接受公开HTTPS、无凭据、无端口、无查询参数的端点。");
       setFilms([]);
       return;
     }
