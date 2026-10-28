@@ -5,6 +5,9 @@ on:
     paths:
       - ".github/workflows/web-v2-open-film-browser.yml"
       - "scripts/web-v2-open-film-browser.mjs"
+      - "src/components/webv2/source-config-lab.tsx"
+      - "src/lib/webv2/source-config-lab.ts"
+      - "src/components/webv2/source-lab-client.tsx"
   workflow_dispatch:
 permissions:
   contents: read
