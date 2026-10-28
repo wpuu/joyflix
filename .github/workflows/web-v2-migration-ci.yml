@@ -17,6 +17,7 @@ on:
       - "tests/webv2.ui.test.mjs"
       - "tests/webv2.source-lab.test.mjs"
       - "tests/webv2.source-config.test.mjs"
+      - "tests/webv2.remote-config.test.mjs"
       - "src/lib/webv2/source-config-lab.ts"
       - "tests/webv2.preview-guard.test.mjs"
   workflow_dispatch:
@@ -41,7 +42,7 @@ jobs:
             exit 1
           fi
       - name: Run Node24 TypeScript contract tests without installing dependencies
-        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.open-films.test.mjs tests/sourcehub.routes.test.mjs tests/webv2.playback.test.mjs tests/webv2.preview-guard.test.mjs tests/webv2.ui.test.mjs tests/webv2.source-lab.test.mjs tests/webv2.source-config.test.mjs
+        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.open-films.test.mjs tests/sourcehub.routes.test.mjs tests/webv2.playback.test.mjs tests/webv2.preview-guard.test.mjs tests/webv2.ui.test.mjs tests/webv2.source-lab.test.mjs tests/webv2.source-config.test.mjs tests/webv2.remote-config.test.mjs
 
   legacy-build-audit:
     needs: contract
