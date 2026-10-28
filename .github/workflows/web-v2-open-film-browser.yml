@@ -1,0 +1,54 @@
+name: Web V2 open films actual Next Chrome playback
+on:
+  push:
+    branches: [feature/web-v2-migration-20261027]
+    paths:
+      - ".github/workflows/web-v2-open-film-browser.yml"
+      - "scripts/web-v2-open-film-browser.mjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-chrome:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    env:
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      VERCEL_TARGET_ENV: preview
+      VERCEL_PROJECT_ID: prj_Rsb44MGU9x6aEd6IqgR4A4MawFrX
+      VERCEL_GIT_COMMIT_REF: feature/web-v2-migration-20261027
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+      - name: Install exact old Next dependencies and temporary QA Selenium
+        run: |
+          npm install --global pnpm@10.14.0 --ignore-scripts --no-audit --no-fund
+          pnpm install --frozen-lockfile --ignore-scripts
+          npm install --prefix /tmp/web-v2-selenium selenium-webdriver@4.51.0 --ignore-scripts --no-audit --no-fund
+      - name: Compile private-preview build in isolated runner, never deploy
+        run: |
+          node scripts/convert-config.js
+          node scripts/generate-manifest.js
+          pnpm exec next build
+      - name: Actual Next.js UI browsing, original full films, first frames and seeks in Chrome
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          pnpm exec next start --hostname 127.0.0.1 --port 3189 > /tmp/web-v2-full-film-server.log 2>&1 &
+          app_pid=$!
+          trap 'code=$?; if [ "$code" != 0 ]; then tail -n 35 /tmp/web-v2-full-film-server.log; fi; kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for n in {1..50}; do
+            if curl -fsS --max-time 2 http://127.0.0.1:3189/v2 > /dev/null 2>&1; then ready=1;break;fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then break;fi
+            sleep 1
+          done
+          test "$ready" = 1
+          node scripts/web-v2-open-film-browser.mjs
