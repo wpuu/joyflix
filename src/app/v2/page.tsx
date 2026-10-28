@@ -20,7 +20,7 @@ export default function WebV2Home() {
     const controller=new AbortController();
     void fetch("/api/v2/sourcehub/featured",{signal:controller.signal,cache:"no-store"})
       .then(async response=>response.ok?await response.json() as {items?:SearchEntry[]}:null)
-      .then(payload=>{if(!controller.signal.aborted && Array.isArray(payload?.items))
+      .then(payload=>{if(!controller.signal.aborted && payload && Array.isArray(payload.items))
         setFeatured(payload.items);})
       .catch(()=>undefined);
     return ()=>controller.abort();
