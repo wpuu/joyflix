@@ -1,0 +1,65 @@
+name: Web V2 licensed full-film bounded delivery gate
+on:
+  push:
+    branches: [feature/web-v2-migration-20261027]
+    paths: [".github/workflows/web-v2-open-film-byte-gate.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bounded-byte-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+      - name: Verify only CC BY film headers, 4KiB each, no full downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const films=[
+            ["spring","https://upload.wikimedia.org/wikipedia/commons/a/a5/Spring_-_Blender_Open_Movie.webm"],
+            ["bunny","https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm"]
+          ];
+          let passed=0;
+          for(const [id,url] of films){
+            const controller=new AbortController();
+            const timer=setTimeout(()=>controller.abort(),12000);
+            const result={film:id,http:null,bytes:0,magicOk:false,rangeOk:false};
+            try{
+              const res=await fetch(url,{
+                method:"GET",redirect:"manual",headers:{"Range":"bytes=0-4095"},
+                signal:controller.signal
+              });
+              result.http=res.status;
+              const type=(res.headers.get("content-type")||"").split(";")[0];
+              const length=Number(res.headers.get("content-length")||0);
+              result.rangeOk=res.status===206 &&
+                !!res.headers.get("content-range") && type==="video/webm" &&
+                Number.isFinite(length) && length>0 && length<=4096;
+              if(result.rangeOk && res.body){
+                const reader=res.body.getReader();
+                let used=0,first=Buffer.alloc(4);
+                try{
+                  while(used<4){
+                    const {done,value}=await reader.read();
+                    if(done || !value)break;
+                    const take=Math.min(4-used,value.length);
+                    first.set(value.subarray(0,take),used);
+                    used+=take;
+                  }
+                }finally{await reader.cancel().catch(()=>{});}
+                result.bytes=used;
+                result.magicOk=used===4 && first.equals(Buffer.from([0x1a,0x45,0xdf,0xa3]));
+              }else{await res.body?.cancel().catch(()=>{});}
+            }catch(err){
+              result.errorClass=err?.name==="AbortError"?"timeout":"network_or_http_error";
+            }finally{clearTimeout(timer);}
+            console.log(JSON.stringify(result));
+            if(result.rangeOk && result.magicOk)passed++;
+          }
+          console.log("WEB_V2_CC_BY_FULL_FILM_BYTES_PASS="+passed+"/"+films.length);
+          if(passed!==films.length)process.exitCode=1;
+          NODE
