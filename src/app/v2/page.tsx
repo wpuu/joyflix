@@ -65,7 +65,12 @@ export default function WebV2Home() {
             <p className="text-xs text-slate-400">从 TV 新版迁移 · 片源中心</p>
           </div>
         </div>
-        <span className="rounded-full border border-amber-400/30 px-3 py-1 text-xs text-amber-200">隔离预览 · 未公开运营</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/v2/qa/source-lab" className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200 hover:border-amber-300/60">
+            个人片源实验室
+          </Link>
+          <span className="rounded-full border border-amber-400/30 px-3 py-1 text-xs text-amber-200">隔离预览 · 未公开运营</span>
+        </div>
       </header>
 
       <section className="max-w-3xl pb-12 pt-12 md:pt-20">

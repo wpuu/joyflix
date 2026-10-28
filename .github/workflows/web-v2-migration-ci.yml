@@ -14,6 +14,7 @@ on:
       - "src/app/v2/**"
       - "src/components/webv2/**"
       - "tests/webv2.ui.test.mjs"
+      - "tests/webv2.source-lab.test.mjs"
       - "tests/webv2.preview-guard.test.mjs"
   workflow_dispatch:
 permissions:
@@ -37,7 +38,7 @@ jobs:
             exit 1
           fi
       - name: Run Node24 TypeScript contract tests without installing dependencies
-        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.routes.test.mjs tests/webv2.playback.test.mjs tests/webv2.preview-guard.test.mjs tests/webv2.ui.test.mjs
+        run: node --experimental-strip-types --test tests/sourcehub.core.test.mjs tests/sourcehub.routes.test.mjs tests/webv2.playback.test.mjs tests/webv2.preview-guard.test.mjs tests/webv2.ui.test.mjs tests/webv2.source-lab.test.mjs
 
   legacy-build-audit:
     needs: contract
